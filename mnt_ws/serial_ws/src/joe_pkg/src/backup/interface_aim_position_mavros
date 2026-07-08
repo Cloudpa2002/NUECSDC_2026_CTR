@@ -1,0 +1,94 @@
+#include "rclcpp/rclcpp.hpp"
+#include "mavros_msgs/srv/set_mode.hpp"
+#include "mavros_msgs/srv/command_bool.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+
+class Interface_Mavros : public rclcpp::Node
+{
+public:
+    Interface_Mavros(std::string name) : Node(name)
+    {
+        RCLCPP_INFO(this->get_logger(), "%s节点已经启动.", name.c_str());
+
+        set_mode_client_ = this->create_client<mavros_msgs::srv::SetMode>("/mavros/set_mode");
+        local_position_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/mavros/setpoint_position/local", 10);
+
+        while (!set_mode_client_->wait_for_service(std::chrono::seconds(1))) {
+            RCLCPP_INFO(this->get_logger(), "Waiting for /mavros/set_mode service...");
+        }
+
+        set_offboard_mode();
+        arm_vehicle();
+        send_local_position(0.0, 0.0, 2.0);
+    }
+
+private:
+    rclcpp::Client<mavros_msgs::srv::SetMode>::SharedPtr set_mode_client_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr local_position_publisher_;
+
+    void set_offboard_mode()
+    {
+        auto request = std::make_shared<mavros_msgs::srv::SetMode::Request>();
+        request->custom_mode = "OFFBOARD";
+
+        auto future = set_mode_client_->async_send_request(request);
+
+        try {
+            auto response = future.get();
+            if (response->mode_sent) {
+                RCLCPP_INFO(this->get_logger(), "Successfully set mode to OFFBOARD.");
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Failed to set mode to OFFBOARD.");
+            }
+        } catch (const std::exception &e) {
+            RCLCPP_ERROR(this->get_logger(), "Service call failed: %s", e.what());
+        }
+    }
+
+    void arm_vehicle()
+    {
+        auto arming_client = this->create_client<mavros_msgs::srv::CommandBool>("/mavros/cmd/arming");
+
+        while (!arming_client->wait_for_service(std::chrono::seconds(1))) {
+            RCLCPP_INFO(this->get_logger(), "Waiting for /mavros/cmd/arming service...");
+        }
+
+        auto request = std::make_shared<mavros_msgs::srv::CommandBool::Request>();
+        request->value = true;
+
+        auto future = arming_client->async_send_request(request);
+
+        try {
+            auto response = future.get();
+            if (response->success) {
+                RCLCPP_INFO(this->get_logger(), "Vehicle armed successfully.");
+            } else {
+                RCLCPP_ERROR(this->get_logger(), "Failed to arm the vehicle.");
+            }
+        } catch (const std::exception &e) {
+            RCLCPP_ERROR(this->get_logger(), "Service call failed: %s", e.what());
+        }
+    }
+
+    void send_local_position(double x, double y, double z)
+    {
+        geometry_msgs::msg::PoseStamped pose;
+        pose.header.stamp = this->get_clock()->now();
+        pose.header.frame_id = "map";
+        pose.pose.position.x = x;
+        pose.pose.position.y = y;
+        pose.pose.position.z = z;
+
+        local_position_publisher_->publish(pose);
+        RCLCPP_INFO(this->get_logger(), "Published local position: [x: %f, y: %f, z: %f]", x, y, z);
+    }
+};
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<Interface_Mavros>("interface_mavros");
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}

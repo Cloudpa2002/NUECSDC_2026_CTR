@@ -1,0 +1,18 @@
+# ROS 编译产物
+build/
+install/
+log/
+
+# Python 编译产物
+__pycache__/
+*.pyc
+
+# VS Code 配置
+.vscode/
+
+# 编辑器备份文件
+*~
+
+# 草稿/临时文件
+草稿.txt
+嵌入式技术报告大纲.txt

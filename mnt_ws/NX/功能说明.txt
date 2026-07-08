@@ -1,0 +1,6 @@
+【NX】NoMachine 远程桌面服务端
+
+功能：用于开发调试阶段从 PC 远程连接 LubanCat 的图形桌面。
+- 无需给 LubanCat 外接显示器键鼠即可操作
+- 飞行运行时不需要，仅为开发调试便利工具
+- 对应安装包：nomachine_8.16.1_1_aarch64.tar.gz

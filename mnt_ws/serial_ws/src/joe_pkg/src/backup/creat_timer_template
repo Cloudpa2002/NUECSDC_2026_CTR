@@ -1,0 +1,46 @@
+
+#include "rclcpp/rclcpp.hpp"
+#include "SerialStream.h"
+#include "std_msgs/msg/string.hpp"
+#include <iostream>
+#include <fstream>
+//#include "mavros_msgs/srv/set_mode.hpp"
+using namespace LibSerial;
+/*
+    创建一个类节点，名字叫做Node03,继承自Node.
+*/
+class Node03 : public rclcpp::Node
+{
+    
+public:
+    // 构造函数,有一个参数为节点名称
+    Node03(std::string name) : Node(name), duty_cycle_(0), increasing_(true)
+    {
+        // 打印一句
+        RCLCPP_INFO(this->get_logger(), "%s节点已经启动.", name.c_str());
+
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(500), 
+        std::bind(&Node03::timer_callback, this));
+
+    }
+
+private:
+    // 定时器回调函数
+    void timer_callback()
+    {
+        RCLCPP_INFO(this->get_logger(), "Current Duty Cycle: %d%%", duty_cycle_);  
+    }
+    // 声名定时器指针
+    rclcpp::TimerBase::SharedPtr timer_;
+};
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    /*产生一个node_03的节点*/
+    auto node = std::make_shared<Node03>("node_03");
+    /* 运行节点，并检测退出信号*/
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}

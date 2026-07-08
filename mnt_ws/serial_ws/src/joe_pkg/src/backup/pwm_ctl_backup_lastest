@@ -1,0 +1,125 @@
+
+/*
+pwm_ctl.cpp 
+VERSION: 0.2
+此版本改动：
+1.更改周期为20ms
+2.封装了一个函数set_pwm_duty_cycle(int duty_cycle)，用于设置PWM占空比
+*/
+#include "rclcpp/rclcpp.hpp"
+#include "SerialStream.h"
+#include "std_msgs/msg/string.hpp"
+#include <iostream>
+#include <fstream>
+//#include "mavros_msgs/srv/set_mode.hpp"
+using namespace LibSerial;
+/*
+    创建一个类节点，名字叫做Node03,继承自Node.
+*/
+class Node03 : public rclcpp::Node
+{
+    
+public:
+    // 构造函数,有一个参数为节点名称
+    Node03(std::string name) : Node(name), duty_cycle_(0), increasing_(true)
+    {
+        // 打印一句
+        RCLCPP_INFO(this->get_logger(), "%s节点已经启动.", name.c_str());
+
+        timer_ = this->create_wall_timer(std::chrono::milliseconds(500), 
+        std::bind(&Node03::timer_callback, this));
+
+        // 配置 PWM export
+        std::ofstream pwm_export(pwm_config.export_path);
+        if (pwm_export.is_open()) {
+            pwm_export << "0";
+            pwm_export.close();
+            RCLCPP_INFO(this->get_logger(), "PWM export configured successfully.");
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to open %s", pwm_config.export_path.c_str());
+            exit(1);
+        }
+
+        // 设置周期
+        std::ofstream pwm_period(pwm_config.period_path);
+        if (pwm_period.is_open()) {
+            pwm_period << pwm_config.period;
+            pwm_period.close();
+            RCLCPP_INFO(this->get_logger(), "PWM period set to %d ns.", pwm_config.period);
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to open %s", pwm_config.period_path.c_str());
+            exit(1);
+        }
+
+    }
+
+private:
+    void set_pwm_duty_cycle(int duty_cycle)
+    {
+        std::ofstream pwm_duty_cycle(pwm_config.duty_cycle_path);
+        if (pwm_duty_cycle.is_open()) {
+            pwm_duty_cycle << (pwm_config.period * duty_cycle / 100);
+            pwm_duty_cycle.close();
+            RCLCPP_INFO(this->get_logger(), "PWM duty cycle set to %d%%.", duty_cycle);
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to open %s", pwm_config.duty_cycle_path.c_str());
+        }
+    }
+    // 声明节点
+    void timer_callback()
+    {
+        RCLCPP_INFO(this->get_logger(), "Current Duty Cycle: %d%%", duty_cycle_);
+        if (increasing_)
+        {
+            duty_cycle_++;
+            if (duty_cycle_ >= 100)
+            {
+                increasing_ = false; // 开始下降
+            }
+        }
+        else
+        {
+            duty_cycle_--;
+            if (duty_cycle_ <= 0)
+            {
+                increasing_ = true; // 开始上升
+            }
+        }
+
+        set_pwm_duty_cycle(duty_cycle_);
+        // 设置 PWM 占空比
+
+        // 启用 PWM
+        std::ofstream pwm_enable(pwm_config.enable_path);
+        if (pwm_enable.is_open()) {
+            pwm_enable << "1";
+            pwm_enable.close();
+        } else {
+            RCLCPP_ERROR(this->get_logger(), "Failed to open %s", pwm_config.enable_path.c_str());
+        }
+
+    }
+    // 声名定时器指针
+    rclcpp::TimerBase::SharedPtr timer_;
+    int duty_cycle_;
+    bool increasing_;
+
+    struct PWMConfig {
+        std::string export_path = "/sys/class/pwm/pwmchip0/export";
+        std::string period_path = "/sys/class/pwm/pwmchip0/pwm0/period";
+        std::string duty_cycle_path = "/sys/class/pwm/pwmchip0/pwm0/duty_cycle";
+        std::string enable_path = "/sys/class/pwm/pwmchip0/pwm0/enable";
+        int period = 20000000; // 默认周期 1ms (1000000ns)
+    } pwm_config;
+
+};
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    /*产生一个node_03的节点*/
+    auto node = std::make_shared<Node03>("node_03");
+    /* 运行节点，并检测退出信号*/
+    rclcpp::spin(node);
+    rclcpp::shutdown();
+    return 0;
+}

@@ -1,0 +1,4 @@
+root@elf2-desktop:/sys/class/gpio#  echo 103 > /sys/class/gpio/export
+root@elf2-desktop:/sys/class/gpio# echo out > /sys/class/gpio/gpio103/direction
+root@elf2-desktop:/sys/class/gpio# echo 1 > /sys/class/gpio/gpio103/value
+root@elf2-desktop:/sys/class/gpio# echo 0 > /sys/class/gpio/gpio103/value

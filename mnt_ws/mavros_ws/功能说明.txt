@@ -1,0 +1,7 @@
+【mavros_ws】MAVROS 通信工作空间
+
+功能：ROS2 与 PX4 飞控之间的通信桥梁。
+- 提供 mavros_msgs 消息和服务定义
+- 负责起飞、降落、模式切换（OFFBOARD/AUTO.LAND 等）
+- 传递位置指令（setpoint）和接收飞控状态
+- 是无人机软件与硬件飞控之间的"翻译官"

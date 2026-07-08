@@ -1,0 +1,7459 @@
+#!/bin/bash
+
+VERSION=8.16.1
+PACKAGE_NAME="server"
+INSTALL_WEB="0"
+NEW_LICENSE_ACRONYM="RS"
+
+
+OLD_NX_LOCALIZATION="/usr/NX"
+DEFAULT_SEPATH="$OLD_NX_LOCALIZATION"
+
+if [ "x$TMPDIR" = "x" ];
+then
+  TMP_FOLDER="/tmp"
+else
+  TMP_FOLDER="$TMPDIR"
+fi
+
+RUNCOMMAND_NO_ERROR_MESSAGE="run_no_error_message"
+RUNCOMMAND_WRONG_PARAMS=1001
+
+USER_NX="nx"
+USER_NXHTD="nxhtd"
+
+DISTRO_FILE=""
+
+if [ -x "/bin/pwd" ];
+then
+  PWDCOMMAND="/bin/pwd"
+elif [ -x "/usr/bin/pwd" ];
+then
+  PWDCOMMAND="/usr/bin/pwd"
+else
+  PWDCOMMAND="pwd"
+fi
+
+if [ -x "/bin/uname" ];
+then
+  UNAMECOMMAND="/bin/uname"
+elif [ -x "/usr/bin/uname" ];
+then
+  UNAMECOMMAND="/usr/bin/uname"
+else
+  UNAMECOMMAND="uname"
+fi
+
+if [ -x "/bin/head" ];
+then
+  HEADCOMMAND="/bin/head"
+elif [ -x "/usr/bin/head" ];
+then
+  HEADCOMMAND="/usr/bin/head"
+else
+  HEADCOMMAND="head"
+fi
+
+if [ -x "/bin/tail" ];
+then
+  TAILCOMMAND="/bin/tail"
+elif [ -x "/usr/bin/tail" ];
+then
+  TAILCOMMAND="/usr/bin/tail"
+else
+  TAILCOMMAND="tail"
+fi
+
+if [ -x "/usr/bin/grep" ]
+then
+  GREPCOMMAND="/usr/bin/grep"
+elif [ -x "/bin/grep" ]
+then
+  GREPCOMMAND="/bin/grep"
+else
+  GREPCOMMAND="grep"
+fi
+
+if [ -x "/sbin/start" ]
+then
+  STARTCOMMAND="/sbin/start"
+else
+  STARTCOMMAND="start"
+fi
+
+if [ -x "/sbin/stop" ]
+then
+  STOPCOMMAND="/sbin/stop"
+else
+  STOPCOMMAND="stop"
+fi
+
+if [ -x "/sbin/status" ]
+then
+  STATUSCOMMAND="/sbin/status"
+else
+  STATUSCOMMAND="status"
+fi
+
+getLinuxNameFromFiles ()
+{
+  #Function returns:
+  # 0 : OS name is found
+  # 1 : OS name not found
+
+  lsbPath="/etc/lsb-release"
+  os_out=""
+  wantedOS="$1"
+  searchedFile=""
+  ret_getLinuxNameFromFiles="1"
+
+  if [ -f "$lsbPath" ];
+  then
+    os_out=$(${GREPCOMMAND} '\(\(NAME\)\|\(DISTRIB_ID\)\)=.*'"${wantedOS}"'.*$' "$lsbPath" 2>/dev/null || test 1)
+  fi
+
+  if [ "x$os_out" = "x" ];
+  then
+
+    if [ -f /etc/os-release ];
+    then
+      searchedFile="/etc/os-release"
+    elif [ -f /usr/lib/os-release ];
+    then
+      searchedFile="/usr/lib/os-release"
+    else
+      return 0
+    fi
+
+    os_out=$(${GREPCOMMAND} '\(\(NAME\)\|\(DISTRIB_ID\)\)=.*'"${wantedOS}"'.*$' "${searchedFile}" 2>/dev/null || test 1)
+
+  fi
+
+  if [ "x${os_out}" != "x" ];
+  then
+      ret_getLinuxNameFromFiles="0"
+  fi
+}
+
+getLinuxName ()
+{
+  ret_getLinuxName=0
+
+  getLinuxNameFromFiles "SUSE"
+
+  if [ "x${ret_getLinuxNameFromFiles}" = "x0" ];
+  then
+    system=suse
+    return 0
+  fi
+
+  if [ -f /etc/SuSE-release ];
+  then
+    system=suse
+
+    DISTRO_FILE="/etc/SuSE-release"
+
+    return 0
+  fi
+
+  if [ -f /etc/slackware-version ];
+  then
+      system=slackware
+
+      DISTRO_FILE="/etc/slackware-version"
+
+      return 0
+  fi
+
+  if [ -f /etc/mandriva-release ];
+  then
+    system=mandriva
+
+    DISTRO_FILE="/etc/mandriva-release"
+
+    return 0
+  fi
+
+  if [ -f /etc/mandrake-release ];
+  then
+    system=mandriva
+
+    DISTRO_FILE="/etc/mandrake-release"
+
+    return 0
+  fi
+
+  if [ -f /etc/fedora-release ];
+  then
+    system=fedora
+
+    DISTRO_FILE="/etc/fedora-release"
+
+    return 0
+  fi
+
+  if [ -f /etc/redhat-release ];
+  then
+    system=redhat
+
+    DISTRO_FILE="/etc/redhat-release"
+
+    return 0
+  fi
+
+  if [ -f /etc/debian_version ];
+  then
+    system=debian
+
+    DISTRO_FILE="/etc/debian_version"
+
+    getLinuxNameFromFiles "Ubuntu"
+
+    if [ "x${ret_getLinuxNameFromFiles}" = "x0" ];
+    then
+      system=ubuntu
+    fi
+
+    getLinuxNameFromFiles "LinuxMint"
+
+    if [ "x${ret_getLinuxNameFromFiles}" = "x0" ];
+    then
+      system=linuxmint
+    fi
+
+    getLinuxNameFromFiles "elementary"
+
+    if [ "x${ret_getLinuxNameFromFiles}" = "x0" ];
+    then
+      system=elementary
+    fi
+
+    return 0
+  fi
+
+  if [ -f /etc/arch-release ];
+  then
+    system=arch
+
+    DISTRO_FILE="/etc/arch-release"
+
+    return 0
+  fi  
+  
+  ret_getLinuxName=1
+  return 0
+}
+
+getSystemName ()
+{
+  system=""
+  OS=$(${UNAMECOMMAND} -s)
+
+  if [ "$OS" = "SunOS" ];
+  then
+    system="solaris"
+  elif [ "$OS" = "Linux" ];
+  then
+    getLinuxName
+    if [ "$ret_getLinuxName" != "0" ];
+    then
+      system="linux"
+    fi
+  elif [ "$OS" = "Darwin" ];
+  then
+    system="macosx"
+  fi
+}
+
+getSystemName
+
+if [ -x "/bin/rm" ];
+then
+  RMCOMMAND="/bin/rm"
+else
+  RMCOMMAND="rm"
+fi
+
+if [ -x "/bin/cp" ];
+then
+  CPCOMMAND="/bin/cp"
+else
+  CPCOMMAND="cp"
+fi
+
+if [ -x "/bin/mv" ];
+then
+  MVCOMMAND="/bin/mv"
+else
+  MVCOMMAND="mv"
+fi
+
+if [ -x "/bin/ln" ];
+then
+  LNCOMMAND="/bin/ln"
+else
+  LNCOMMAND="ln"
+fi
+
+if [ -x "/bin/unlink" ];
+then
+  UNLINKCOMMAND="/bin/unlink"
+elif [ -x "/usr/bin/unlink" ];
+then
+  UNLINKCOMMAND="/usr/bin/unlink"
+elif [ -x "/usr/sbin/unlink" ];
+then
+  UNLINKCOMMAND="/usr/sbin/unlink"
+else
+  UNLINKCOMMAND="unlink"
+fi
+
+if [ -x "/bin/modinfo" ];
+then
+  MODINFOCOMMAND="/bin/modinfo"
+elif [ -x "/usr/bin/modinfo" ];
+then
+  MODINFOCOMMAND="/usr/bin/modinfo"
+elif [ -x "/sbin/modinfo" ];
+then
+  MODINFOCOMMAND="/sbin/modinfo"
+elif [ -x "/usr/sbin/modinfo" ];
+then
+  MODINFOCOMMAND="/usr/sbin/modinfo"
+else
+  MODINFOCOMMAND="modinfo"
+fi
+
+if [ -x "/bin/ls" ];
+then
+  LSCOMMAND="/bin/ls"
+else
+  LSCOMMAND="ls"
+fi
+
+if [ -x "/usr/bin/chcon" ];
+then
+  CHCONCOMMAND="/usr/bin/chcon"
+else
+  CHCONCOMMAND="chcon"
+fi
+
+if [ -x "/usr/bin/restorecon" ];
+then
+  RESTORECONCOMMAND="/usr/bin/restorecon"
+elif [ -x "/sbin/restorecon" ];
+then
+  RESTORECONCOMMAND="/sbin/restorecon"
+else
+  RESTORECONCOMMAND="restorecon"
+fi
+
+if [ -x "/usr/sbin/getenforce" ];
+then
+  GETENFORCECOMMAND="/usr/sbin/getenforce"
+else
+  GETENFORCECOMMAND="getenforce"
+fi
+
+if [ -x "/usr/sbin/semanage" ];
+then
+  SEMANAGECOMMAND="/usr/sbin/semanage"
+else
+  SEMANAGECOMMAND="semanage"
+fi
+
+if [ -x "/usr/sbin/semodule" ];
+then
+  SEMODULECOMMAND="/usr/sbin/semodule"
+else
+  SEMODULECOMMAND="semodule"
+fi
+
+
+if [ "$system" = "solaris" ];
+then
+  if [ -x "/usr/bin/nawk" ];
+  then
+    AWKCOMMAND="/usr/bin/nawk"
+  elif [ -x "/usr/xpg4/bin/awk" ];
+  then
+    AWKCOMMAND="/usr/xpg4/bin/awk"
+  elif [ -x "/usr/bin/awk" ];
+  then
+    AWKCOMMAND="/usr/bin/awk"
+  else
+    AWKCOMMAND="awk"
+  fi
+else
+  if [ -x "/usr/bin/awk" ];
+  then
+    AWKCOMMAND="/usr/bin/awk"
+  else
+    AWKCOMMAND="awk"
+  fi
+fi
+
+if [ -x "/usr/sbin/nscd" ];
+then
+  NSCDCOMMAND="/usr/sbin/nscd"
+else
+  NSCDCOMMAND="nscd"
+fi
+
+if [ -x "/usr/bin/basename" ];
+then
+  BASENAMECOMMAND="/usr/bin/basename"
+else
+  BASENAMECOMMAND="basename"
+fi
+
+if [ -x "/usr/bin/dirname" ];
+then
+  DIRNAMECOMMAND="/usr/bin/dirname"
+else
+  DIRNAMECOMMAND="dirname"
+fi
+
+if [ -x "/usr/bin/lsb_release" ];
+then
+  LSBRELEASECOMMAND="/usr/bin/lsb_release"
+else
+  LSBRELEASECOMMAND="lsb_release"
+fi
+
+if [ -x "/bin/sleep" ];
+then
+  SLEEPCOMMAND="/bin/sleep"
+else
+  SLEEPCOMMAND="sleep"
+fi
+
+if [ "$system" = "solaris" ];
+then
+  if [ -x "/usr/xpg4/bin/grep" ]
+  then
+    GREPCOMMAND="/usr/xpg4/bin/grep"
+  elif [ -x "/usr/bin/grep" ]
+  then
+    GREPCOMMAND="/usr/bin/grep"
+  elif [ -x "/bin/grep" ]
+  then
+    GREPCOMMAND="/bin/grep"
+  else
+    GREPCOMMAND="grep"
+  fi
+else
+  if [ -x "/usr/bin/grep" ]
+  then
+    GREPCOMMAND="/usr/bin/grep"
+  elif [ -x "/bin/grep" ]
+  then
+    GREPCOMMAND="/bin/grep"
+  else
+    GREPCOMMAND="grep"
+  fi
+fi
+
+if [ -x "/usr/bin/find" ]
+then
+  FINDCOMMAND="/usr/bin/find"
+elif [ -x "/bin/find" ]
+then
+  FINDCOMMAND="/bin/find"
+else
+  FINDCOMMAND="find"
+fi
+
+if [ "$system" = "solaris" ];
+then
+  if [ -x "/usr/xpg4/bin/sed" ];
+  then
+    SEDCOMMAND="/usr/xpg4/bin/sed"
+  elif [ -x "/usr/bin/sed" ];
+  then
+    SEDCOMMAND="/usr/bin/sed"
+  elif [ -x "/bin/sed" ];
+  then
+    SEDCOMMAND="/bin/sed"
+  else
+    SEDCOMMAND="sed"
+  fi
+else
+  if [ -x "/usr/bin/sed" ];
+  then
+    SEDCOMMAND="/usr/bin/sed"
+  elif [ -x "/bin/sed" ];
+  then
+    SEDCOMMAND="/bin/sed"
+  else
+    SEDCOMMAND="sed"
+  fi
+fi
+
+if [ "$system" = "solaris" ];
+then
+  if [ -x "/usr/xpg4/bin/id" ]
+  then
+    IDCOMMAND="/usr/xpg4/bin/id"
+  elif [ -x "/usr/bin/id" ]
+  then
+    IDCOMMAND="/usr/bin/id"
+  elif [ -x "/usr/bin/id" ]
+  then
+    IDCOMMAND="/usr/bin/id"
+  else
+    IDCOMMAND="id"
+  fi
+else
+  if [ -x "/usr/bin/id" ];
+  then
+    IDCOMMAND="/usr/bin/id"
+  else
+    IDCOMMAND="id"
+  fi
+fi
+
+if [ "$system" = "solaris" ];
+then
+  if [ -x "/usr/xpg4/bin/make" ]
+  then
+    MAKECOMMAND="/usr/xpg4/bin/make"
+  elif [ -x "/usr/bin/make" ]
+  then
+    MAKECOMMAND="/usr/bin/make"
+  elif [ -x "/bin/make" ]
+  then
+    MAKECOMMAND="/bin/make"
+  else
+    MAKECOMMAND="make"
+  fi
+else
+  if [ -x "/bin/make" ];
+  then
+    MAKECOMMAND="/bin/make"
+  else
+    MAKECOMMAND="make"
+  fi
+fi
+
+if [ "$system" = "macosx" ];
+then
+  if [ -x "/usr/bin/md5" ]
+  then
+    MD5SUMCOMMAND="/usr/bin/md5"
+  elif [ -x "/bin/md5" ]
+  then
+    MD5SUMCOMMAND="/bin/md5"
+  elif [ -x "/sbin/md5" ]
+  then
+    MD5SUMCOMMAND="/sbin/md5"
+  else
+    MD5SUMCOMMAND="md5"
+  fi
+else
+  if [ -x "/usr/bin/md5sum" ]
+  then
+    MD5SUMCOMMAND="/usr/bin/md5sum"
+  elif [ -x "/bin/md5sum" ]
+  then
+    MD5SUMCOMMAND="/bin/md5sum"
+  else
+    MD5SUMCOMMAND="md5sum"
+  fi
+fi
+
+if [ -x "/bin/ps" ];
+then
+  PSCOMMAND="/bin/ps"
+elif [ -x "/usr/bin/ps" ];
+then
+  PSCOMMAND="/usr/bin/ps"
+else
+  PSCOMMAND="ps"
+fi
+
+if [ -x "/bin/sort" ];
+then
+  SORTCOMMAND="/bin/sort"
+elif [ -x "/usr/bin/sort" ];
+then
+  SORTCOMMAND="/usr/bin/sort"
+else
+  SORTCOMMAND="sort"
+fi
+
+if [ -x "/bin/date" ];
+then
+  DATECOMMAND="/bin/date"
+elif [ -x "/usr/bin/date" ];
+then
+  DATECOMMAND="/usr/bin/date"
+else
+  DATECOMMAND="date"
+fi
+
+if [ -x "/bin/tail" ];
+then
+  TAILCOMMAND="/bin/tail"
+elif [ -x "/usr/bin/tail" ];
+then
+  TAILCOMMAND="/usr/bin/tail"
+else
+  TAILCOMMAND="tail"
+fi
+
+if [ -x /bin/mkdir ];
+then
+  MKDIRCOMMAND="/bin/mkdir"
+elif [ -x "/usr/bin/mkdir" ];
+then
+  MKDIRCOMMAND="/usr/bin/mkdir"
+else
+  MKDIRCOMMAND="mkdir"
+fi
+
+if [ -x "/bin/rmdir" ];
+then
+  RMDIRCOMMAND="/bin/rmdir"
+elif [ -x "/usr/bin/rmdir" ];
+then
+  RMDIRCOMMAND="/usr/bin/rmdir"
+else
+  RMDIRCOMMAND="rmdir"
+fi
+
+if [ -x "/bin/echo" ];
+then
+  ECHOCOMMAND="/bin/echo"
+elif [ -x "/usr/bin/echo" ];
+then
+  ECHOCOMMAND="/usr/bin/echo"
+else
+  ECHOCOMMAND="echo"
+fi
+
+if [ -x "/bin/cut" ];
+then
+  CUTCOMMAND="/bin/cut"
+elif [ -x "/usr/bin/cut" ];
+then
+  CUTCOMMAND="/usr/bin/cut"
+else
+  CUTCOMMAND="cut"
+fi
+
+if [ -x "/bin/cat" ];
+then
+  CATCOMMAND="/bin/cat"
+elif [ -x "/usr/bin/cat" ];
+then
+  CATCOMMAND="/usr/bin/cat"
+else
+  CATCOMMAND="cat"
+fi
+
+if [ -x "/bin/expr" ];
+then
+  EXPRCOMMAND="/bin/expr"
+elif [ -x "/usr/bin/expr" ];
+then
+  EXPRCOMMAND="/usr/bin/expr"
+else
+  EXPRCOMMAND="expr"
+fi
+
+if [ -x "/bin/chmod" ];
+then
+  CHMODCOMMAND="/bin/chmod"
+elif [ -x "/usr/bin/chmod" ];
+then
+  CHMODCOMMAND="/usr/bin/chmod"
+else
+  CHMODCOMMAND="chmod"
+fi
+
+if [ -x /bin/chown ];
+then
+  CHOWNCOMMAND="/bin/chown"
+elif [ -x "/usr/bin/chown" ];
+then
+  CHOWNCOMMAND="/usr/bin/chown"
+elif [ -x /usr/sbin/chown ];
+then
+  CHOWNCOMMAND="/usr/sbin/chown"
+else
+  CHOWNCOMMAND="chown"
+fi
+
+if [ -x /bin/install ];
+then
+  INSTALLCOMMAND="/bin/install"
+elif [ -x "/usr/bin/install" ];
+then
+  INSTALLCOMMAND="/usr/bin/install"
+elif [ -x /usr/sbin/install ];
+then
+  INSTALLCOMMAND="/usr/sbin/install"
+else
+  INSTALLCOMMAND="${NX_ROOT}/scripts/setup/install"
+fi
+
+if [ -x "/bin/touch" ];
+then
+  TOUCHCOMMAND="/bin/touch"
+elif [ -x "/usr/bin/touch" ];
+then
+  TOUCHCOMMAND="/usr/bin/touch"
+else
+  TOUCHCOMMAND="touch"
+fi
+
+if [ -x "/bin/tr" ];
+then
+  TRCOMMAND="/bin/tr"
+elif [ -x "/usr/bin/tr" ];
+then
+  TRCOMMAND="/usr/bin/tr"
+else
+  TRCOMMAND="tr"
+fi
+
+if [ -x "/bin/kill" ];
+then
+  KILLCOMMAND="/bin/kill"
+elif [ -x "/usr/bin/kill" ];
+then
+  KILLCOMMAND="/usr/bin/kill"
+else
+  KILLCOMMAND="kill"
+fi
+
+if [ -x "/bin/killall" ];
+then
+  KILLALLCOMMAND="/bin/killall"
+elif [ -x "/usr/bin/killall" ];
+then
+  KILLALLCOMMAND="/usr/bin/killall"
+elif [ -x "/usr/sbin/killall" ];
+then
+  KILLALLCOMMAND="/usr/sbin/killall"
+else
+  KILLALLCOMMAND="killall"
+fi
+
+if [ -x "/sbin/pidof" ];
+then
+  PIDOFCOMMAND="/sbin/pidof"
+else
+  PIDOFCOMMAND="pidof"
+fi
+
+if [ -x "/bin/tee" ];
+then
+  TEECOMMAND="/bin/tee"
+elif [ -x "/usr/bin/tee" ];
+then
+  TEECOMMAND="/usr/bin/tee"
+else
+  TEECOMMAND="tee"
+fi
+
+if [ -x "/bin/readlink" ];
+then
+  READLINKCOMMAND="/bin/readlink"
+elif [ -x "/usr/bin/readlink" ];
+then
+  READLINKCOMMAND="/usr/bin/readlink"
+else
+  READLINKCOMMAND="readlink"
+fi
+
+if [ -x "/bin/gunzip" ];
+then
+  GUNZIPCOMMAND="/bin/gunzip"
+elif [ -x "/usr/bin/gunzip" ];
+then
+  GUNZIPCOMMAND="/usr/bin/gunzip"
+else
+  GUNZIPCOMMAND="gunzip"
+fi
+
+if [ -x "/bin/tar" ];
+then
+  TARCOMMAND="/bin/tar"
+elif [ -x "/usr/bin/tar" ];
+then
+  TARCOMMAND="/usr/bin/tar"
+else
+  TARCOMMAND="tar"
+fi
+
+if [ -x "/usr/bin/du" ];
+then
+  DUCOMMAND="/usr/bin/du"
+else
+  DUCOMMAND="du"
+fi
+
+if [ -x "/usr/bin/ypcat" ];
+then
+  YPCATCOMMAND="/usr/bin/ypcat"
+else
+  YPCATCOMMAND="ypcat"
+fi
+
+if [ -x "/usr/bin/printf" ];
+then
+  PRINTFCOMMAND="/usr/bin/printf"
+else
+  PRINTFCOMMAND="printf"
+fi
+
+if [ -x "/usr/bin/which" ];
+then
+  WHICHCOMMAND="/usr/bin/which"
+else
+  WHICHCOMMAND="which"
+fi
+
+if [ -x "/usr/sbin/sw_vers" ];
+then
+  SWVERSCOMMAND="/usr/sbin/sw_vers"
+elif [ -x "/usr/bin/sw_vers" ];
+then
+  SWVERSCOMMAND="/usr/bin/sw_vers"
+elif [ -x "/bin/sw_vers" ];
+then
+  SWVERSCOMMAND="/bin/sw_vers"
+elif [ -x "/sbin/sw_vers" ];
+then
+  SWVERSCOMMAND="/sbin/sw_vers"
+else
+  SWVERSCOMMAND="sw_vers"
+fi
+
+if [ -x "/usr/bin/dscl" ];
+then
+  DSCLCOMMAND="/usr/bin/dscl"
+else
+  DSCLCOMMAND="dscl"
+fi
+
+if [ -x "/usr/sbin/createhomedir" ];
+then
+  CREATEHOMEDIRCOMMAND="/usr/sbin/createhomedir"
+else
+  CREATEHOMEDIRCOMMAND="createhomedir"
+fi
+
+if [ -x "/bin/systemctl" ];
+then
+  SYSTEMCTLCOMMAND="/bin/systemctl"
+elif [ -x "/usr/bin/systemctl" ];
+then
+  SYSTEMCTLCOMMAND="/usr/bin/systemctl"
+else
+  SYSTEMCTLCOMMAND="systemctl"
+fi
+
+if [ -x "/sbin/initctl" ];
+then
+  INITCTLCOMMAND="/sbin/initctl"
+elif [ -x "/bin/initctl" ];
+then
+  INITCTLCOMMAND="/bin/initctl"
+else
+  INITCTLCOMMAND="initctl"
+fi
+
+if [ -x "/sbin/ldconfig" ];
+then
+  LDCONFIGCOMMAND="/sbin/ldconfig"
+elif [ -x "/usr/sbin/ldconfig" ];
+then
+  LDCONFIGCOMMAND="/usr/sbin/ldconfig"
+else
+  LDCONFIGCOMMAND="ldconfig"
+fi
+
+if [ -x "/usr/bin/objdump" ];
+then
+  OBJDUMPCOMMAND="/usr/bin/objdump"
+else
+  OBJDUMPCOMMAND="objdump"
+fi
+
+if [ -x "/usr/sbin/adduser" ];
+then
+  ADDUSERCOMMAND="/usr/sbin/adduser"
+else
+  ADDUSERCOMMAND="adduser"
+fi
+
+if [ -x "/usr/sbin/useradd" ];
+then
+  USERADDCOMMAND="/usr/sbin/useradd"
+else
+  USERADDCOMMAND="useradd"
+fi
+
+if [ -x "/usr/sbin/userdel" ];
+then
+  USERDELCOMMAND="/usr/sbin/userdel"
+else
+  USERDELCOMMAND="userdel"
+fi
+
+if [ -x "/usr/sbin/usermod" ];
+then
+  USERMODCOMMAND="/usr/sbin/usermod"
+else
+  USERMODCOMMAND="usermod"
+fi
+
+if [ -x "/usr/sbin/groupadd" ];
+then
+  GROUPADDCOMMAND="/usr/sbin/groupadd"
+else
+  GROUPADDCOMMAND="groupadd"
+fi
+
+if [ -x "/usr/sbin/groupdel" ];
+then
+  GROUPDELCOMMAND="/usr/sbin/groupdel"
+else
+  GROUPDELCOMMAND="groupdel"
+fi
+
+if [ -x "/bin/su" ];
+then
+  SUCOMMAND="/bin/su"
+elif [ -x "/usr/bin/su" ];
+then
+  SUCOMMAND="/usr/bin/su"
+else
+  SUCOMMAND="su"
+fi
+
+if [ -x "/bin/sudo" ];
+then
+  SUDOCOMMAND="/bin/sudo"
+elif [ -x "/usr/bin/sudo" ];
+then
+  SUDOCOMMAND="/usr/bin/sudo"
+else
+  SUDOCOMMAND="sudo"
+fi
+
+if [ -x "/bin/launchctl" ];
+then
+  LAUNCHCTLCOMMAND="/bin/launchctl"
+elif [ -x "/usr/bin/launchctl" ];
+then
+  LAUNCHCTLCOMMAND="/usr/bin/launchctl"
+else
+  LAUNCHCTLCOMMAND="launchctl"
+fi
+
+if [ -x "/bin/sysctl" ];
+then
+  SYSCTLCOMMAND="/bin/sysctl"
+elif [ -x "/usr/bin/sysctl" ];
+then
+  SYSCTLCOMMAND="/usr/bin/sysctl"
+elif [ -x "/usr/sbin/sysctl" ];
+then
+  SYSCTLCOMMAND="/usr/sbin/sysctl"
+else
+  SYSCTLCOMMAND="sysctl"
+fi
+
+if [ -x "/bin/wc" ];
+then
+  WCCOMMAND="/bin/wc"
+elif [ -x "/usr/bin/wc" ];
+then
+  WCCOMMAND="/usr/bin/wc"
+elif [ -x "/usr/sbin/wc" ];
+then
+  WCCOMMAND="/usr/sbin/wc"
+else
+  WCCOMMAND="wc"
+fi
+
+if [ -x "/usr/bin/ssh-keygen" ];
+then
+  KEYGENCOMMAND="/usr/bin/ssh-keygen"
+elif [ -x "/bin/ssh-keygen" ];
+then
+  KEYGENCOMMAND="/bin/ssh-keygen"
+else
+  KEYGENCOMMAND="ssh-keygen"
+fi
+
+if [ -x "/usr/bin/execstack" ];
+then
+  EXECSTACKCOMMAND="/usr/bin/execstack"
+else
+  EXECSTACKCOMMAND="execstack"
+fi
+
+if [ -x "/usr/bin/update-mime-database" ];
+then
+  UPDATEMIMEDATABASECOMMAND="/usr/bin/update-mime-database"
+else
+  UPDATEMIMEDATABASECOMMAND="update-mime-database"
+fi
+
+if [ -x "/usr/bin/update-desktop-database" ];
+then
+  UPDATEDESKTOPDATABASECOMMAND="/usr/bin/update-desktop-database"
+else
+  UPDATEDESKTOPDATABASECOMMAND="update-desktop-database"
+fi
+
+if [ -x "/usr/bin/xdg-open" ];
+then
+  XDGOPENCOMMAND="/usr/bin/xdg-open"
+else
+  XDGOPENCOMMAND="xdg-open"
+fi
+
+if [ -x "/usr/bin/xdg-mime" ];
+then
+  XDGMIMECOMMAND="/usr/bin/xdg-mime"
+else
+  XDGMIMECOMMAND="xdg-mime"
+fi
+
+if [ -x "/usr/bin/xdg-icon-resource" ];
+then
+  XDGICONRESOURCECOMMAND="/usr/bin/xdg-icon-resource"
+else
+  XDGICONRESOURCECOMMAND="xdg-icon-resource"
+fi
+
+if [ -x "/usr/bin/xdg-desktop-menu" ];
+then
+  XDGDESKTOPMENUCOMMAND="/usr/bin/xdg-desktop-menu"
+else
+  XDGDESKTOPMENUCOMMAND="xdg-desktop-menu"
+fi
+
+if [ -x "/usr/bin/gtk-update-icon-cache" ];
+then
+  GTKUPDATEICONCACHECOMMAND="/usr/bin/gtk-update-icon-cache"
+elif [ -x "/bin/gtk-update-icon-cache" ];
+then
+  GTKUPDATEICONCACHECOMMAND="/bin/gtk-update-icon-cache"
+elif [ -x "/usr/sbin/gtk-update-icon-cache" ];
+then
+  GTKUPDATEICONCACHECOMMAND="/usr/sbin/gtk-update-icon-cache"
+else
+  GTKUPDATEICONCACHECOMMAND=""
+fi
+
+if [ -x "/usr/bin/X11/gnome-terminal" ];
+then
+  GNOMETERMINALCOMMAND="/usr/bin/X11/gnome-terminal"
+elif [ -x "/usr/bin/gnome-terminal" ];
+then
+  GNOMETERMINALCOMMAND="/usr/bin/gnome-terminal"
+elif [ -x "/bin/gnome-terminal" ];
+then
+  GNOMETERMINALCOMMAND="/bin/gnome-terminal"
+else
+  GNOMETERMINALCOMMAND="gnome-terminal"
+fi
+
+if [ -x "/usr/bin/X11/xterm" ];
+then
+  XTERMCOMMAND="/usr/bin/X11/xterm"
+elif [ -x "/usr/bin/xterm" ];
+then 
+  XTERMCOMMAND="/usr/bin/xterm"
+elif [ -x "/bin/xterm" ];
+then
+  XTERMCOMMAND="/bin/xterm"
+else
+  XTERMCOMMAND="xterm"
+fi
+
+if [ -x "/usr/bin/X11/konsole" ];
+then
+  KONSOLECOMMAND="/usr/bin/X11/konsole"
+elif [ -x "/usr/bin/konsole" ];
+then
+  KONSOLECOMMAND="/usr/bin/konsole"
+elif [ -x "/bin/konsole" ];
+then
+  KONSOLECOMMAND="/bin/konsole"
+else
+  KONSOLECOMMAND="konsole"
+fi
+
+if [ -x "/usr/bin/X11/xfce4-terminal" ];
+then
+  XFCE4COMMAND="/usr/bin/X11/xfce4-terminal"
+elif [ -x "/usr/bin/xfce4-terminal" ];
+then
+  XFCE4COMMAND="/usr/bin/xfce4-terminal"
+elif [ -x "/bin/xfce4-terminal" ];
+then
+  XFCE4COMMAND="/bin/xfce4-terminal"
+else
+  XFCE4COMMAND="xfce4-terminal"
+fi
+
+if [ -x "/usr/bin/X11/lxterminal" ];
+then
+  LXTERMINALCOMMAND="/usr/bin/X11/lxterminal"
+elif [ -x "/usr/bin/lxterminal" ];
+then
+  LXTERMINALCOMMAND="/usr/bin/lxterminal"
+elif [ -x "/bin/lxterminal" ];
+then
+  LXTERMINALCOMMAND="/bin/lxterminal"
+else
+  LXTERMINALCOMMAND="lxterminal"
+fi
+
+if [ -x "/usr/bin/X11/deepin-terminal" ];
+then
+  DEEPINTERMINALCOMMAND="/usr/bin/X11/deepin-terminal"
+elif [ -x "/usr/bin/deepin-terminal" ];
+then
+  DEEPINTERMINALCOMMAND="/usr/bin/deepin-terminal"
+elif [ -x "/bin/deepin-terminal" ]
+then
+  DEEPINTERMINALCOMMAND="/bin/deepin-terminal"
+else
+  DEEPINTERMINALCOMMAND="deepin-terminal"
+fi
+
+if [ -x "/usr/bin/runcon" ];
+then
+  RUNCONCOMMAND="/usr/bin/runcon"
+else
+  RUNCONCOMMAND="runcon"
+fi
+
+if [ -x "/usr/bin/chkconfig" ];
+then
+  CHKCONFIGCOMMAND="/usr/bin/chkconfig"
+else
+  CHKCONFIGCOMMAND="chkconfig"
+fi
+
+if [ -x "/sbin/insserv" ];
+then
+  INSSERVCOMMAND="/sbin/insserv"
+elif [ -x "/usr/bin/insserv" ];
+then
+  INSSERVCOMMAND="/usr/bin/insserv"
+else
+  INSSERVCOMMAND="insserv"
+fi
+
+if [ -x "/usr/sbin/update-rc.d" ];
+then
+  UPDATERCDCOMMAND="/usr/sbin/update-rc.d"
+else
+  UPDATERCDCOMMAND="update-rc.d"
+fi
+
+if [ -x "/usr/bin/arch" ];
+then
+  ARCHCOMMAND="/usr/bin/arch"
+else
+  ARCHCOMMAND="arch"
+fi
+
+if [ -x "/usr/bin/strip" ];
+then
+  STRIPCOMMAND="/usr/bin/strip"
+else
+  STRIPCOMMAND="strip"
+fi
+
+if [ -x "/usr/bin/ssh-keyscan" ];
+then
+  KEYSCANCOMMAND="/usr/bin/ssh-keyscan"
+elif [ -x "/bin/ssh-keyscan" ];
+then
+  KEYSCANCOMMAND="/bin/ssh-keyscan"
+else
+  KEYSCANCOMMAND="ssh-keyscan"
+fi
+
+if [ -x "/usr/bin/ssh-agent" ];
+then
+  SSHAGENT_PATH="/usr/bin/ssh-agent"
+elif [ -x "/bin/ssh-agent" ];
+then
+  SSHAGENT_PATH="/bin/ssh-agent"
+else
+  SSHAGENT_PATH=""
+fi
+
+if [ -x "/usr/bin/fuser" ];
+then
+  FUSERCOMMAND="/usr/bin/fuser"
+elif [ -x "/bin/fuser" ];
+then
+  FUSERCOMMAND="/bin/fuser"
+else
+  FUSERCOMMAND="fuser"
+fi
+
+if [ -x "/usr/bin/setsid" ];
+then
+  SETSIDCOMMAND="/usr/bin/setsid"
+elif [ -x "/bin/setsid" ];
+then
+  SETSIDCOMMAND="/bin/setsid"
+else
+  SETSIDCOMMAND="setsid"
+fi
+
+if [ -x "/usr/bin/umask" ];
+then
+  UMASKCOMMAND="/usr/bin/umask"
+elif [ -x "/bin/umask" ];
+then
+  UMASKCOMMAND="/bin/umask"
+else
+  UMASKCOMMAND="umask"
+fi
+
+if [ -x "/usr/bin/cd" ];
+then
+  CDCOMMAND="/usr/bin/cd"
+elif [ -x "/bin/cd" ];
+then
+  CDCOMMAND="/bin/cd"
+else
+  CDCOMMAND="cd"
+fi
+
+if [ -x "/usr/bin/tccutil" ];
+then
+  TCCUTILCOMMAND="/usr/bin/tccutil"
+else
+  TCCUTILCOMMAND="tccutil"
+fi
+
+if [ -x "/usr/bin/sessreg" ];
+then
+  SESSREGCOMMAND="/usr/bin/sessreg"
+elif [ -x "/usr/X11/bin/sessreg" ];
+then
+  SESSREGCOMMAND="/usr/X11/bin/sessreg"
+else
+  SESSREGCOMMAND="sessreg"
+fi
+
+if [ -x "/usr/bin/pkcheck" ];
+then
+  PKCHECKCOMMAND="/usr/bin/pkcheck"
+else
+  PKCHECKCOMMAND="pkcheck"
+fi
+
+if [ -x "/usr/bin/pactl" ];
+then
+  PACTLCOMMAND="/usr/bin/pactl"
+elif [ -x "/bin/pactl" ];
+then
+  PACTLCOMMAND="/bin/pactl"
+else
+  PACTLCOMMAND="pactl"
+fi
+
+
+BASHSHELL="/bin/bash"
+
+NXSHELL="/etc/NX/nxserver"
+if [ "$system" = "macosx" ];
+then
+  ROOTGNAME=$($IDCOMMAND -gn root)
+  NXUSERHOME="/Library/Application Support/NoMachine/var"
+else
+  ROOTGNAME="root"
+  NXUSERHOME="/var/NX"
+fi
+
+NXHOME="${NXUSERHOME}/${USER_NX}"
+
+SERVER_USR_CONFIG_FILE="${NX_ROOT}/etc/server.cfg"
+NODE_USR_CONFIG_FILE="${NX_ROOT}/etc/node.cfg"
+WEBPLAYER_USR_CONFIG_FILE="${NX_ROOT}/etc/cloud.cfg"
+HTD_USR_CONFIG_FILE="${NX_ROOT}/etc/web.cfg"
+
+currentTime=$(${DATECOMMAND} +'%a %b %d %T %Y')
+
+LAST_SUBPACKAGE_SERVER="server"
+LAST_SUBPACKAGE_NODE="node"
+LAST_SUBPACKAGE_PLAYER="player"
+LAST_SUBPACKAGE_WEBPLAYER="webplayer"
+
+isDevel ()
+{
+  if [ "x${NX_INSTALL_DEVEL}" = "x" ];
+  then
+    NX_INSTALL_DEVEL=0
+    if [ -f "/${TMP_FOLDER}/nxtimedevel" ];
+    then
+      NX_INSTALL_DEVEL=1
+    fi
+  fi
+}
+
+#
+# printMsg() procedure take argument : txt
+# echo(echo and log) log (only log) nolog (only echo)
+# default - using PROCESS - WARNINGS/ERRORS
+#
+
+isDevel
+
+printMsgNoDot ()
+{
+  severity=$2
+
+  if [ "${SETUP_SCRIPT}" = "1" ];
+  then
+    TXT=$1
+
+    if [ "${TXT}" = "" ];
+    then
+      return 0
+    fi
+
+    if [ "x${NX_INSTALL_DEVEL}" = "x1" ];
+    then
+      if [ "x${system}" = "xmacosx" ] && [ -x "/${TMP_FOLDER}/nxdate" ];
+      then
+        TIME_DEVEL=$(/${TMP_FOLDER}/nxdate 2>/dev/null)
+      else
+        TIME_DEVEL=$(${DATECOMMAND} "+%H:%M:%S:%N" 2>/dev/null)
+      fi
+
+      TIME_DEVEL="${TIME_DEVEL} "
+    fi
+
+    if [ "${PROCESS}" = "" ];
+    then
+      PROCESS="${ERROR}"
+    fi
+
+    case "$severity" in
+      "warn"      ) process="${WARNING}";TXT="WARNING: ${TXT}";logtype="log";SHOWWARNINFO="yes";;
+      "warnshow"  ) process="${WARNING}";TXT="WARNING: ${TXT}";logtype="show";SHOWWARNINFO="yes";;
+      "error"     ) process="${ERROR}";TXT="ERROR: ${TXT}";logtype="show";SHOWWARNINFO="yes";;
+      "cmd"       ) process="${PROCESS}";logtype="log";;
+      "nolog"     ) process="${PROCESS}";logtype="nolog";;
+      "onlylog"   ) process="${PROCESS}";logtype="onlylog";;
+      "nonewline" ) process="${PROCESS}";logtype="nonewline";;
+      ""          ) process="${PROCESS}";logtype="show";;
+      *           ) process="${PROCESS}";;
+    esac
+
+    if [ "${LOGFILE}" = "" ];
+    then
+      if [ "${logtype}" = "onlylog" ];
+      then
+        return
+      fi
+
+      logtype="nolog"
+    elif [ "${logtype}" = "onlylog" ];
+    then
+      logtype="log"
+    fi
+
+    if [ "$3" = "1" ];
+    then
+      TXT="$TXT."
+    fi
+
+    case "$logtype" in
+      "nolog"      ) ${ECHOCOMMAND} "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}";;
+      "log"        ) ${ECHOCOMMAND} "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}" >> "${LOGFILE}";;
+      "show"       ) ${ECHOCOMMAND} "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}";${ECHOCOMMAND} "${PREFIX} ${PROCESS} ${TXT}" >> "${LOGFILE}";;
+      "nonewline"  ) ${ECHOCOMMAND} -n "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}";${ECHOCOMMAND} "${PREFIX} ${PROCESS} ${TXT}" >> "${LOGFILE}";;
+      ""           ) ${ECHOCOMMAND} "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}";;
+      *            ) ${ECHOCOMMAND} "${TIME_DEVEL}$PREFIX ${PROCESS} ${TXT}";;
+    esac
+
+    case "$severity" in
+      "warn"     ) setInstallationWarning;;
+      "warnshow" ) setInstallationWarning;;
+      "error"    ) setInstallationError;;
+    esac
+
+  else
+    if [ "x$1" != "x" ];
+    then
+      if [ "x$2" = "x0" ];
+      then
+        ${ECHOCOMMAND} "${1}"
+      fi
+    fi
+  fi
+}
+
+printMsg ()
+{
+  WITH_DOT=1
+  printMsgNoDot "$1" "$2" "${WITH_DOT}"
+}
+
+runShCommand ()
+{
+  ret_runShCommand=0
+
+  if [ "$1" = "" ];
+  then
+    ret_runShCommand=1
+    return 0
+  else
+    command="$1"
+  fi
+
+  outCommand=$(${BASHSHELL} -c "${command}" 2>&1)
+
+  if [ $? != 0 ];
+  then
+    if [ "${SCRIPT_SETUP}" = "1" ];
+    then
+      LastCommand="Error is: ${outCommand}"
+    else
+      printMsg "ERROR: ${outCommand}" "$2"
+    fi
+  fi
+}
+
+getDefalutMsgForCommand ()
+{
+  ret_getDefalutMsgForCommand=0
+
+  if [ "x$1" = "x" ];
+  then
+    defMsg="Error while executing this command"
+    ret_getDefalutMsgForCommand=1
+    return 0
+  else
+    outcmd=$(${ECHOCOMMAND} "$1" | ${CUTCOMMAND} -f1 -d " ")
+    if [ "x${outcmd}" = "x" ];
+    then
+      defMsg="Error while executing '$1'"
+      ret_getDefalutMsgForCommand=1
+      return 0
+    else
+      case "${outcmd}" in
+        "mkdir")  "Cannot create directory"
+      esac
+    fi
+  fi
+}
+
+runCommand ()
+{
+  ret_runCommand=0
+
+  if [ "$1" = "" ];
+  then
+    ret_runCommand=${RUNCOMMAND_WRONG_PARAMS}
+    return 0
+  else
+    command="$1"
+  fi
+
+  if [ "$2" = "" ];
+  then
+    ret_runCommand=${RUNCOMMAND_WRONG_PARAMS}
+    return 0
+  else
+    message="$2"
+  fi
+
+  if [ "$3" = "" ];
+  then
+    important="NO"
+  else
+    important="YES"
+  fi
+
+  if [ "${SETUP_SCRIPT}" = "1" ] && [ "x$3" != "xnolog" ];
+  then
+    printMsg "Running: ${command}" "cmd"
+  fi
+
+  outCommand=$(${BASHSHELL} -c "${command}" 2>&1)
+  rc_return=$?
+  if [ ${rc_return} != 0 ];
+  then
+    if [ "${SCRIPT_SETUP}" = "1" ];
+    then
+
+      if [ "${important}" = "YES" ];
+      then
+        if [ "x${outCommand}" != "x" ] && [ "x$3" != "xnolog" ];
+        then
+          printMsg "Result: ${outCommand}" "error"
+        fi
+
+        if [ "${message}" !=  "${RUNCOMMAND_NO_ERROR_MESSAGE}" ];
+        then
+          printMsg "${message}" "error"
+        fi
+
+        exit 1
+      else
+        if [ "x${outCommand}" != "x" ];
+        then
+          printMsg "Result: ${outCommand}" "cmd"
+        fi
+
+        if [ "${message}" !=  "${RUNCOMMAND_NO_ERROR_MESSAGE}" ];
+        then
+          printMsg "${message}" "warn"
+        fi
+      fi
+    else
+      if [ "${message}" !=  "${RUNCOMMAND_NO_ERROR_MESSAGE}" ];
+      then
+        printMsg "${message}" "$3"
+      fi
+    fi
+  else
+    if [ "x${outCommand}" != "x" ];
+    then
+      if [ "x$3" = "xnolog" ];
+      then
+        printMsg "Running: ${command}" "cmd"
+      fi
+
+      printMsg "Result: ${outCommand}" "cmd"
+    fi
+
+    if [ "x$3" != "xnolog" ];
+    then
+      printMsg "Result: OK" "cmd"
+    fi
+  fi
+
+  ret_runCommand=${rc_return}
+  return 0
+}
+
+printMsgDebug ()
+{
+  #NX_INSTALL_DEBUG=1
+  if [ "x$1" != "x" ] && [ "${NX_INSTALL_DEBUG}" = "1" ];
+  then
+    if [ "x${LOGFILE}" = "x" ];
+    then
+      ${ECHOCOMMAND} "DEBUG: $1"
+    else
+      ${ECHOCOMMAND} "DEBUG: $1" >> "${LOGFILE}"
+    fi
+  fi
+}
+
+printMsgDebugReturn ()
+{
+  #Params:
+  #1 - function name
+  #2 - returned value
+
+  printMsgDebug "$1: return $2"
+}
+
+CFG_RUNNER_ROOT="RunnerRoot"
+CFG_PLAYER_ROOT="PlayerRoot"
+CFG_NODE_ROOT="NodeRoot"
+CFG_SERVER_ROOT="ServerRoot"
+CFG_CONNECT_ROOT="ConnectRoot"
+CFG_WEBPLAYER_ROOT="WebPlayerRoot"
+CFG_USBREDIRECTOR_ROOT="UsbRedirectorRoot"
+
+CFG_NETWORK_DATABASE_ROOT="NetworkDatabaseRoot"
+CFG_NETWORK_GATEWAY_ROOT="NetworkGatewayRoot"
+CFG_NETWORK_MESSAGING_ROOT="NetworkMessagingRoot"
+CFG_NETWORK_RELAY_ROOT="NetworkRelayRoot"
+CFG_NETWORK_WEB_ROOT="NetworkWebRoot"
+
+setPackageVariables()
+{
+  ETC_CONFIG_FILE=""
+
+  if [ "x${NX_MPKG_PACKAGE}" != "x" ];
+  then
+    #NX_MPKG_PACKAGE=${PACKAGE_NAME}
+    ETC_CONFIG_FILE="/etc/NX/${NX_MPKG_PACKAGE}/localhost/${PACKAGE_NAME}.cfg"
+  fi
+}
+
+setPackageVariables
+
+isRoot ()
+{
+  ret_isRoot=0
+  id_out=$(${IDCOMMAND} -u)
+  if [ "x${id_out}" = "x0" ];
+  then
+    ret_isRoot=1
+    return 0
+  fi
+
+  return 0
+}
+
+checkNXUserExist ()
+{
+  ret_checkNXUserExist=0
+  id_out=$(${IDCOMMAND} -u ${USER_NX} > /dev/null 2>&1)
+  if [ "$?" = "0" ];
+  then
+    ret_checkNXUserExist=1
+    return 0
+  fi
+
+  return 0
+}
+
+checkUserExist ()
+{
+  user=$1
+  ret_checkUserExist=0
+
+  if [ "x$user" = "x" ];
+  then
+    ret_checkUserExist=1
+    return 0
+  fi
+
+  id_out=$(${IDCOMMAND} -u "${user}" > /dev/null 2>&1)
+  if [ "$?" = "0" ];
+  then
+    ret_checkUserExist=1
+    return 0
+  fi
+
+  return 0
+}
+
+checkUserExistPasswd ()
+{
+  user=$1
+  ret_checkUserExistPasswd=0
+
+  user_out=$(${GREPCOMMAND} "^${user}:" /etc/passwd 2>/dev/null | ${AWKCOMMAND} -F ":" '{print $1}')
+  if [ "x${user_out}" = "x${user}" ];
+  then
+    ret_checkUserExistPasswd=1
+    return 0
+  fi
+
+  return 0
+}
+
+getRootCfgName()
+{
+  printMsgDebug "getRootCfgName: ($1)"
+
+  package=$1
+  ret_getRootCfgName=0
+  ret_CFGRootName=""
+
+  if [ "x${package}" = "xrunner" ];
+  then
+    ret_CFGRootName=$CFG_RUNNER_ROOT
+  elif [ "x${package}" = "xplayer" ];
+  then
+    ret_CFGRootName=$CFG_PLAYER_ROOT
+  elif [ "x${package}" = "xnode" ];
+  then
+    ret_CFGRootName=$CFG_NODE_ROOT
+  elif [ "x${package}" = "xserver" ];
+  then
+    ret_CFGRootName=$CFG_SERVER_ROOT
+  elif [ "x${package}" = "xwebplayer" ];
+  then
+    ret_CFGRootName=$CFG_WEBPLAYER_ROOT
+  elif [ "x${package}" = "xconnect" ];
+  then
+    ret_CFGRootName=$CFG_CONNECT_ROOT
+  elif [ "x${package}" = "xusb" ];
+  then
+    ret_CFGRootName=$CFG_USBREDIRECTOR_ROOT
+  elif [ "x${package}" = "xavc" ];
+  then
+    ret_CFGRootName=$CFG_CLIENT_ROOT
+  elif [ "x${package}" = "xnetwork-database" ];
+  then
+    ret_CFGRootName=$CFG_NETWORK_DATABASE_ROOT
+  elif [ "x${package}" = "xnetwork-gateway" ];
+  then
+    ret_CFGRootName=$CFG_NETWORK_GATEWAY_ROOT
+  elif [ "x${package}" = "xnetwork-messaging" ];
+  then
+    ret_CFGRootName=$CFG_NETWORK_MESSAGING_ROOT
+  elif [ "x${package}" = "xnetwork-relay" ];
+  then
+    ret_CFGRootName=$CFG_NETWORK_RELAY_ROOT
+  elif [ "x${package}" = "xnetwork-web" ];
+  then
+    ret_CFGRootName=$CFG_NETWORK_WEB_ROOT
+  else
+    ${ECHOCOMMAND} "ERROR: Unknown package -- ${package}"
+    ret_getRootCfgName=1
+  fi
+}
+
+getConfigFileName ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - product name, i.e. player, node, server, connect
+  #
+
+  printMsgDebug "getConfigFileName: ($1,$2)"
+
+  if [ "x$2" != "x" ];
+  then
+    product_name=$2
+  elif [ "x${NX_MPKG_PACKAGE}" != "x" ];
+  then
+    product_name=${NX_MPKG_PACKAGE}
+  else
+    product_name=$1
+  fi
+
+  if [ "x$1" = "xconnect" ];
+  then
+    isRoot
+    if [ ${ret_isRoot} = 1 ];
+    then
+      ret_getConfigFileName="/etc/NX/${product_name}/localhost/${1}.cfg"
+    else
+      ret_getConfigFileName="${HOME}/.nx/config/server/${product_name}/localhost/server.cfg"
+    fi
+  elif [ "x$1" = "xwebrunner" ];
+  then
+    ret_getConfigFileName="/etc/NX/${product_name}/localhost/webplayer.cfg"
+  else
+    ret_getConfigFileName="/etc/NX/${product_name}/localhost/${1}.cfg"
+  fi
+}
+
+trimLeft ()
+{
+  ret="${1%"${1##*[![:space:]]}"}"
+}
+
+trimRight ()
+{
+  ret="${1#"${1%%[![:space:]]*}"}"
+}
+
+trimBoth ()
+{
+  trimLeft "$1"
+  trimRight "${ret}"
+}
+
+trimLeftQuota ()
+{
+  ret="${1%\"}"
+}
+
+trimRightQuota ()
+{
+  ret="${1#\"}"
+}
+
+trimBothQuota ()
+{
+  trimLeftQuota "$1"
+  trimRightQuota "${ret}"
+}
+
+
+getValueFromCfgFile ()
+{
+  #Config File Format:  Variable = Value or Variable = "Value"
+
+  #Parameters:
+  # $1 - Variable
+  # $2 - File name
+  #Function returns:
+  # 0 : no such variable or no such file
+  # 1 : variable is commented (default value)
+  # 2 : variable exists, value returned in cfg_val
+
+  printMsgDebug "getValueFromCfgFile: ($1,$2)"
+  ret_getValueFromCfgFile=0
+
+  variable=$1
+  file_name=$2
+  cfg_val=""
+
+  if [ ! -f "${file_name}" ] || [ "x${variable}" = "x" ];
+  then
+    return 0
+  fi
+
+  grep_out=$(${GREPCOMMAND} -E "^([[:space:]]){0,}${variable}([[:space:]]){1,}" "${file_name}" 2>/dev/null)
+
+  if [ "x${grep_out}" = "x" ];
+  then
+    grep_out=$(${GREPCOMMAND} -E "^([[:space:]]){0,}[#]{0,1}([[:space:]]){0,}${variable}([[:space:]]){1,}" "${file_name}" 2>/dev/null)
+  fi
+
+  if [ "x${grep_out}" != "x" ];
+  then
+    grep_commented=$(${GREPCOMMAND} -e "${grep_out}" "${file_name}" | ${HEADCOMMAND} -n 1 | ${AWKCOMMAND} '{ if (index($1,"#")==1) print "0"; else print "1" }' 2>/dev/null)
+    if [ "x${grep_commented}" = "x0" ];
+    then
+      cfg_val=$(${ECHOCOMMAND} "${grep_out}" | ${AWKCOMMAND} -F '\"' '{print $2}')
+      if [ "x${cfg_val}" = "x" ];
+      then
+        cfg_val=$(${ECHOCOMMAND} "${grep_out}" | ${AWKCOMMAND} -v FS="${variable}"'[ \t]+' '{print $NF}')
+      fi
+      ret_getValueFromCfgFile=1
+      return 0
+    else
+      cfg_val=$(${ECHOCOMMAND} "${grep_out}" | ${AWKCOMMAND} -F '\"' '{print $2}')
+      if [ "x${cfg_val}" = "x" ];
+      then
+        cfg_val=$(${ECHOCOMMAND} "${grep_out}" | ${AWKCOMMAND} -v FS="${variable}"'[ \t]+' '{print $NF}')
+      fi
+      ret_getValueFromCfgFile=2
+      return 0
+    fi
+  else
+    return 0
+  fi
+}
+
+setValueAtCfgFile ()
+{
+  #Config File Format:  Variable = Value or Variable = "Value".
+
+  #Parameters:
+  # $1 - File name
+  # $2 - Variable
+  # $3 - New value
+  #Function returns:
+  # 0 : no such variable or no such file
+  # 1 : variable was commented
+  # 2 : variable exists
+
+  printMsgDebug "${FUNCNAME}: ($1,$2,$3)"
+  ret_setValueAtCfgFile=0
+
+  file_name="$1"
+  variable="$2"
+  new_value="$3"
+
+  pos=$(${EXPRCOMMAND} "${new_value}" : '.*\(.*[[:space:]].*\)')
+  grep_out=$(${GREPCOMMAND} -E "^([[:space:]]){0,}${variable}([[:space:]]){1,}" "${file_name}" 2>/dev/null)
+
+  if [ "x${grep_out}" != "x" ];
+  then
+    if [ "x${pos}" = "x" ];
+    then
+      ${SEDCOMMAND} -e 's|^[[:space:]]*'"${variable}"'[[:space:]][[:space:]]*.*|'"${variable}"' '"${new_value}"'|' "${file_name}" > "${file_name}.tmp"
+    else
+      ${SEDCOMMAND} -e 's|^[[:space:]]*'"${variable}"'[[:space:]][[:space:]]*.*|'"${variable}"' \"'"${new_value}"'\"|' "${file_name}" > "${file_name}.tmp"
+    fi
+    commandRestoreFile "${file_name}" "tmp"
+    ret_setValueAtCfgFile=2
+    return 0
+  fi
+
+  grep_out=$(${GREPCOMMAND} -E "^([[:space:]]){0,}[#]{0,1}([[:space:]]){0,}${variable}([[:space:]]){1,}" "${file_name}" 2>/dev/null)
+  if [ "x${grep_out}" != "x" ];
+  then
+    if [ "x${pos}" = "x" ];
+    then
+      ${SEDCOMMAND} -e 's|^[[:space:]]*[#]*[[:space:]]*'"${variable}"'[[:space:]][[:space:]]*.*|'"${variable}"' '"${new_value}"'|' "${file_name}" > "${file_name}.tmp"
+    else
+      ${SEDCOMMAND} -e 's|^[[:space:]]*[#]*[[:space:]]*'"${variable}"'[[:space:]][[:space:]]*.*|'"${variable}"' \"'"${new_value}"'\"|' "${file_name}" > "${file_name}.tmp"
+    fi
+
+    commandRestoreFile "${file_name}" "tmp"
+    ret_setValueAtCfgFile=1
+    return 0
+  fi
+
+  return 0
+}
+
+changeKeyAtConfigFile ()
+{
+  file_name="$1"
+  key="$2"
+  new_value="$3"
+
+  ret_changeKeyAtConfigFile=0
+  setValueAtCfgFile "${file_name}" "${key}" "${new_value}"
+  if [ ${ret_setValueAtCfgFile} != 0 ];
+  then
+    printMsgUpdatedKeyinConfigFile "${key}" "${new_value}"
+    return 0
+  else
+    printMsg "ERROR: Cannot add key: ${key}" "cmd"
+    ret_changeKeyAtConfigFile=1
+    return 0
+  fi
+}
+
+getPackagePath()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "getPackagePath: ($1)"
+
+  ret_getPackagePath=0
+  ret_packagePath=""
+
+  package_name="$1"
+  if [ "x${package_name}" = "x" ];
+  then
+    ret_getPackagePath=1
+    return 0
+  fi
+
+  if [ "x${system}" = "xmacosx" ];
+  then
+    if [ "${package_name}" = "server" ];
+    then
+      #ret_packagePath="/Applications/NoMachine Service.app/Contents/Frameworks"
+      ret_packagePath="/Applications/NoMachine.app/Contents/Frameworks"
+      return 0
+    elif [ "${package_name}" = "node" ];
+    then
+      ret_packagePath="/Applications/NoMachine Node.app/Contents/Frameworks"
+      return 0
+    elif [ "${package_name}" = "player" ];
+    then
+      ret_packagePath="/Applications/NoMachine.app/Contents/Frameworks"
+      ROOTDIR="${ret_packagePath}"
+      return 0
+    fi
+
+    ret_getPackagePath=1
+    return 0
+  fi
+
+  getRootCfgName "${package_name}"
+  if [ "${ret_getRootCfgName}" != "0" ] || [ "x${ret_CFGRootName}" = "x" ];
+  then
+    ret_getPackagePath=1
+    return 0
+  fi
+
+  getConfigFileName "${package_name}" "${package_name}"
+
+  if [ ! -f "${ret_getConfigFileName}" ];
+  then
+    getConfigFileName "server" "node"
+    getValueFromCfgFile "${ret_CFGRootName}" "${ret_getConfigFileName}"
+  else
+    getValueFromCfgFile "${ret_CFGRootName}" "${ret_getConfigFileName}"
+  fi
+
+  if [ "${ret_getValueFromCfgFile}" = "2" ];
+  then
+    #FIXME: ROOTDIR variable has to be removed
+    ROOTDIR="${cfg_val}"
+    ret_packagePath="${cfg_val}"
+    return 0
+  else
+    ret_getPackagePath=1
+    return 0
+  fi
+}
+
+getCfgFileVersion ()
+{
+  package_name=$1
+  installation_path="$2"
+  suffix_path="$3"
+
+  cfg_version=""
+
+  printMsgDebug "getCfgFileVersion: ($1,$2)"
+  ret_getCfgFileVersion=0
+
+  if [ "x${suffix_path}" = "x" ];
+  then
+    config_file="${installation_path}/etc/${package_name}.cfg"
+  else
+    config_file="${installation_path}/etc/${package_name}.cfg${suffix_path}"
+  fi
+
+  printMsgDebug "Config file: '${config_file}'"
+
+  if [ -f "${config_file}" ];
+  then
+    cfg_version=$(${GREPCOMMAND} -i "^configfileversion" "${config_file}" | ${AWKCOMMAND} '{if ($2 == "=" ) print $3; else print $2}' | ${SEDCOMMAND} -e 's/\"//g')
+    printMsgDebug "Config file version: ${cfg_version}."
+
+  else
+    printMsgDebug  "WARNING: Cannot find file: ${config_file}."
+    ret_getCfgFileVersion=1
+    return 0
+  fi
+}
+
+__removeETCDirectory ()
+{
+  package_name="$1"
+
+  if [ ! -d "${ETC_DIR}" ];
+  then
+    return 0
+  fi
+
+  commandRmIfExist "${ETC_DIR}/nx${package_name}" "cmd"
+  commandRmIfExist "${ETC_CONFIG_FILE}" "cmd"
+  commandRmIfExist "${ETC_CONFIG_FILE}.sample" "cmd"
+
+  commandRmDirIfExistEmpty "${ETC_DIR}/${NX_MPKG_PACKAGE}/localhost" "cmd"
+
+  if [ "x${NX_MPKG_PACKAGE}" != "x" ] && [ -f "${ETC_DIR}/${NX_MPKG_PACKAGE}/packages/nx${package_name}.tar.gz" ];
+  then
+    commandRmIfExist "${ETC_DIR}/${NX_MPKG_PACKAGE}/packages/nx${package_name}.tar.gz" "cmd"
+  fi
+
+  commandRmDirIfExistEmpty "${ETC_DIR}/${NX_MPKG_PACKAGE}/packages" "cmd"
+  commandRmDirIfExistEmpty "${ETC_DIR}/${NX_MPKG_PACKAGE}" "cmd"
+  commandRmDirIfExistEmpty "${ETC_DIR}/" "cmd"
+
+
+  if [ "x${package_name}" = "xwebplayer" ]
+  then
+    commandRmIfExist "${ETC_RUNNER_CONFIG_FILE}" "cmd"
+    commandRmIfExist "${ETC_RUNNER_CONFIG_FILE}.sample" "cmd"
+  fi
+
+  return 0
+}
+
+removeETCDirectory ()
+{
+  package_name="$1"
+
+  if [ "x${package_name}" = "x" ];
+  then
+    package_name=${PACKAGE_NAME}
+  fi
+
+  if [ "x${ETC_DIR}" = "x" ];
+  then
+    ETC_DIR="/etc/NX"
+  fi
+
+  if [ "x${ETC_CONFIG_FILE}" = "x" ];
+  then
+    ETC_CONFIG_FILE="${ETC_DIR}/${NX_MPKG_PACKAGE}/localhost/${package_name}.cfg"
+  fi
+
+  __removeETCDirectory "${package_name}"
+
+  return 0
+}
+
+isInstalledProduct ()
+{
+  #
+  # Par1 - product name, i.e. player, connect, server
+  #
+
+  printMsgDebug "isInstalledProduct: ($1)"
+  ret_isInstalledProduct=0
+
+  case "${1}" in
+    player)
+        getConfigFileName "${1}" "${1}"
+        if [ -f "${ret_getConfigFileName}" ]
+        then
+          ret_isInstalledProduct=1
+          return 0
+        else
+          return 0
+        fi
+        ;;
+    node)
+        getConfigFileName "${1}" "${1}"
+        node_cfg="${ret_getConfigFileName}"
+        getConfigFileName "server" "server"
+        server_cfg="${ret_getConfigFileName}"
+
+        if [ -f "${node_cfg}" ];
+        then
+          if [ ! -f "${server_cfg}" ];
+          then
+            ret_isInstalledProduct=1
+            return 0
+          else
+            return 0
+          fi
+        else
+          return 0
+        fi
+        ;;
+    server)
+        getConfigFileName "${1}" "${1}"
+        server_cfg="${ret_getConfigFileName}"
+
+        if [ -f "${server_cfg}" ];
+        then
+          ret_isInstalledProduct=1
+        else
+          return 0
+        fi
+        ;;
+    webplayer)
+        getConfigFileName "${1}" "${1}"
+        if [ -f "${ret_getConfigFileName}" ];
+        then
+          ret_isInstalledProduct=1
+          return 0
+        else
+          return 0
+        fi
+        ;;
+#    avc)
+#        if [ -f "${NX_ROOT}/lib/libav.so" ];
+#        then
+#          ret_isInstalledProduct=1
+#          return 0
+#        else
+#          return 0
+#        fi
+#        ;;
+      *)
+        return 0
+        esac
+
+  return 0
+}
+
+getProductName() {
+
+  printMsgDebug "getProductName: (${1})"
+  ret_getProductName=""
+
+  case "${1}" in
+    runner)
+      ret_getProductName="NoMachine Runner"
+      ;;
+    player)
+      ret_getProductName="NoMachine Player"
+      ;;
+    node)
+      ret_getProductName="NoMachine Node"
+      ;;
+    server)
+      ret_getProductName="NoMachine Server"
+      ;;
+    webplayer)
+      ret_getProductName="NoMachine Cloud Server"
+      ;;
+    connect)
+      ret_getProductName="NoMachine Connect"
+      ;;
+    usb)
+      ret_getProductName="NoMachine USB Redirector"
+      ;;
+    avc)
+      ret_getProductName="NoMachine Avc Connector"
+      ;;
+    network-database)
+      ret_getProductName="NoMachine Network Database"
+      ;;
+    network-gateway)
+      ret_getProductName="NoMachine Network Gateway"
+      ;;
+    network-messaging)
+      ret_getProductName="NoMachine Network Messaging"
+      ;;
+    network-relay)
+      ret_getProductName="NoMachine Network Relay"
+      ;;
+    network-web)
+      ret_getProductName="NoMachine Network Web"
+      ;;
+  esac
+
+  printMsgDebug "getProductName: ${ret_getProductName}"
+}
+
+capitalizeFirst ()
+{
+  string0="$@"
+  firstchar=${string0:0:1}
+  string1=${string0:1}
+  retCapitalizeFirst=$(${ECHOCOMMAND} "${firstchar}" | ${TRCOMMAND} "[:lower:]" "[:upper:]")
+  retCapitalizeFirst=${retCapitalizeFirst}${string1}
+}
+
+getInstalledVersionFromBinaries ()
+{
+  package_name="$1"
+  installation_path="$2"
+  version=""
+
+  printMsgDebug "getInstalledVersionFromBinaries: ($1,$2)"
+
+  ret_getInstalledVersionFromBinaries=0
+
+  if [ "x${package_name}" = "x" ];
+  then
+
+    printMsgDebug "getInstalledVersion: Package name not provided."
+
+    ret_getInstalledVersionFromBinaries=1
+
+    return 0
+  fi
+
+  if [ "x${package_name}" = "xusb" ];
+  then
+
+    printMsgDebug "Skipping check for version of installed packages from binaries: '${package_name}'"
+
+    ret_getInstalledVersionFromBinaries=1
+
+    return 0
+  fi
+
+  if [ "x${installation_path}" = "x" ];
+  then
+    printMsgDebug "getInstalledVersion: Path not provided, assumed path: ${OLD_NX_LOCALIZATION}."
+
+    installation_path="${OLD_NX_LOCALIZATION}"
+  fi
+
+  if [ ! -x "${installation_path}/bin/nx${package_name}" ];
+  then
+    printMsgDebug "getInstalledVersion: File not found: ${installation_path}/bin/nx${package_name}"
+
+    return 0
+  fi
+
+  if [ "${package_name}x" = serverx ]
+  then
+    command_out=$("${installation_path}/bin/nx${package_name}" --version --simple 2>/dev/null | ${HEADCOMMAND} -n 1 2>/dev/null)
+  else
+    command_out=$("${installation_path}/bin/nx${package_name}" --version 2>/dev/null | ${HEADCOMMAND} -n 1 2>/dev/null)
+  fi
+
+  if [ "x${command_out}" != "x" ];
+  then
+    printMsgDebug "command_out=${command_out}"
+
+    if [[ ${command_out} == *xpired* ]];
+    then
+      version="3"
+      version_full="3"
+      version_expired=1
+
+      ret_getInstalledVersionFromBinaries=0
+      return 0
+    fi
+
+    if [[ ${command_out} == *ERROR* ]];
+    then
+      version=""
+
+      ret_getInstalledVersionFromBinaries=0
+      return 0
+    fi
+
+    
+    version=$(${ECHOCOMMAND} "${command_out}" | ${SEDCOMMAND} 's/.*Version //' | ${CUTCOMMAND} -d '.' -f1)
+    version_full=$(${ECHOCOMMAND} "${command_out}" | ${SEDCOMMAND} 's/.*Version //' | ${CUTCOMMAND} -d '.' -f -3)
+    printMsgDebug "VERSION = ${version}"
+  fi
+
+  if [ "x${version}" = "x" ];
+  then
+    getCfgFileVersion "$package_name" "${installation_path}"
+
+    if [ "${ret_getCfgFileVersion}" != "0" ];
+    then
+      printMsgDebug "getInstalledVersion: Cannot determine version of: ${package_name}."
+
+      ret_getInstalledVersionFromBinaries=1
+
+      return 0
+    else
+
+      version=$(${ECHOCOMMAND} "${cfg_version}" | ${CUTCOMMAND} -d '.' -f1)
+      version_full=$(${ECHOCOMMAND} "${cfg_version}" | ${CUTCOMMAND} -d '.' -f -3)
+
+      if [ "x${version}" != "x" ];
+      then
+        version=$(${EXPRCOMMAND} "${version}" + 1)
+        printMsgDebug "VERSION = ${version}"
+        return 0
+      else
+        printMsgDebug  "getInstalledVersion: Bad config file version."
+        ret_getInstalledVersionFromBinaries=1
+        return 0
+      fi
+    fi
+  fi
+
+  return 0
+}
+
+isUpgrade ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "isUpgrade: ($1)"
+  ret_isUpgrade=0
+
+  package_name=$1
+
+  PREV_NX_PATH="${OLD_NX_LOCALIZATION}"
+
+  getPackagePath "${package_name}"
+
+  if [ ${ret_getPackagePath} = 0 ];
+  then
+    PREV_NX_PATH="${ROOTDIR}"
+  fi
+
+  getInstalledVersionFromBinaries "${package_name}" "${PREV_NX_PATH}"
+
+  if [ ${ret_getInstalledVersionFromBinaries} = 1 ];
+  then
+    isInstalledClient3
+
+    if [ "x${ret_isInstalledClient3}" = "x1" ];
+    then
+      printMsgDebug "Detected installation of an old NX Client product"
+
+      ret_isUpgrade=1
+    fi
+    return 0
+  fi
+
+  isInstalledClient3
+
+  if [ "x${ret_isInstalledClient3}" = "x1" ];
+  then
+    printMsgDebug "Detected installation of an old NX Client product"
+
+    ret_isUpgrade=1
+
+    return 0
+  fi
+
+  printMsgDebug "VERSION (isUpgrade) = ${version}"
+
+  if [ "x${version}" != "x" ];
+  then
+    if [ "${version}" -le 3 ];
+    then
+      ret_isUpgrade=1
+      return 0
+    fi
+  fi
+  return 0
+}
+
+checkServerInstallation ()
+{
+  printMsgDebug "checkServerInstallation: ()"
+  ret_checkServerInstallation=0
+
+  if [ -x "${NXSHELL}" ];
+  then
+    if [[ "${NXSHELL}" = *"server" ]]
+    then
+      outCheckServerInstallation=$("${NXSHELL}" --version --simple  2>&1 | ${HEADCOMMAND} -n 1 2>/dev/null)
+    else
+      outCheckServerInstallation=$("${NXSHELL}" --version  2>&1 | ${HEADCOMMAND} -n 1 2>/dev/null)
+    fi
+
+    if [ $? != 0 ];
+    then
+      ret_checkServerInstallation=1
+      return 0
+    fi
+  else
+    ret_checkServerInstallation=1
+    return 0
+  fi
+
+  return 0
+}
+
+shutdownServer ()
+{
+  printMsgDebug "shutdownServer: ($1)"
+  ret_shutdownServer=0
+
+  if [ "x$1" = "x" ];
+  then
+    NX_SERVER_ROOT="${NX_ROOT}"
+  else
+    NX_SERVER_ROOT="$1"
+  fi
+
+  if [ "$system" = "macosx" ]; then
+    var_run="/Library/Application Support/NoMachine/var/run"
+  else
+    var_run="${NX_ROOT}/var/run"
+  fi
+
+  if [ ! -f "${var_run}/nxserver.shutdown" ];
+  then
+    checkServerInstallation
+
+    if [ ${ret_checkServerInstallation} = 0 ];
+    then
+      if [ "x${SETUP_SCRIPT}" != "x1" ];
+      then
+        if [ "x${operation_nr}" = "x" ];
+        then
+          operation_nr="701"
+        fi
+
+        ${ECHOCOMMAND} "NX> ${operation_nr} Shutting down: nxserver."
+      else
+        printMsgNoDot "Shutting down: nxserver" "cmd"
+      fi
+
+      NXServer="${NX_SERVER_ROOT}/bin/nxserver.bin"
+
+      if [ -x "${NXServer}" ];
+      then
+        cmdout=$("${NXSHELL}" --shutdown)
+
+        if [ $? != 0 ];
+        then
+          if [ "x${SETUP_SCRIPT}" != "x1" ];
+          then
+            ${ECHOCOMMAND} "NX> ${operation_nr} ERROR: Cannot shutdown nxserver."
+          fi
+          printMsg "Cannot shutdown nxserver" "error"
+          printMsg "${cmdout}" "cmd"
+          ret_shutdownServer=1
+        fi
+      else
+        printMsg "Skipping shutdown. No nxserver file." "warn"
+
+        ret_shutdownServer=1
+      fi
+    else
+      printMsg "Skipping shutdown. No nxshell file." "warn"
+
+      ret_shutdownServer=1
+    fi
+  fi
+}
+
+stopNXServer ()
+{
+  ret_stopNXServer=0
+
+  checkServerInstallation
+
+  if [ ${ret_checkServerInstallation} != 0 ];
+  then
+    printMsg "Cannot stop service: nxserver" "warn"
+    printMsg "checkServerInstallation" "cmd"
+    ret_stopNXServer=1
+
+    return 0
+  fi
+
+  stopServer=$("${NXSHELL}" --stop < /dev/null 2>&1)
+  result_stop=$?
+  result_stop=$(${ECHOCOMMAND} "${stopServer}")
+
+  out_msg=$(${ECHOCOMMAND} "${result_stop}" | ${GREPCOMMAND} "NX> 123 Disabled service: nxserver")
+
+  if [ "x${out_msg}" = "x" ];
+  then
+    out_msg=$(${ECHOCOMMAND} "${result_stop}" | ${GREPCOMMAND} "NX> .* Service: nxserver already disabled")
+  fi
+
+  if [ "x${out_msg}" = "x" ];
+  then
+    if [ -f "${NXSHELL}" ];
+    then
+      runCommand "'${NXSHELL}' --stop" "Cannot stop NX server" "warn"
+      ret_stopNXServer=${ret_runCommand}
+
+      return 0
+    else
+      printMsg "Cannot stop service: nxserver" "warn"
+
+      ret_stopNXServer=1
+
+      return 0
+    fi
+  fi
+
+  return 0
+}
+
+shutdownServerPreinstall ()
+{
+  printMsgDebug "shutdownServerPreinstall: ()"
+  getPackagePath "server"
+  if [ ${ret_getPackagePath} = 0 ];
+  then
+    shutdownServer "${ret_packagePath}"
+  fi
+}
+
+removeSlashAtTheEnd ()
+{
+  dirName="$1"
+
+  if [ "x${dirName}" != "x" ] && [ "x${dirName}" != "x/" ];
+  then
+    dirName=$(${EXPRCOMMAND} "x${dirName}" : 'x\(.*[^/]\)')
+  fi
+}
+
+commandChown ()
+{
+  owner="$1"
+  file="$2"
+  msgType="$3"
+  ret_commandChown=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHOWNCOMMAND} ${owner} '${file}'" "Cannot change ownership of: ${file} to: ${owner}" "${msgType}"
+    ret_commandChown=${ret_runCommand}
+    return 0
+  else
+    ret_commandChown=1
+    printMsg "Cannot change ownership of: ${file} to: ${owner}. Path doesn't exist" "cmd"
+  fi
+}
+
+commandChownIfExist ()
+{
+  owner="$1"
+  file="$2"
+  msgType="$3"
+  ret_commandChown=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHOWNCOMMAND} ${owner} '${file}'" "Cannot change ownership of: ${file} to: ${owner}" "${msgType}"
+    ret_commandChown="${ret_runCommand}"
+    return 0
+  fi
+}
+
+commandChownR ()
+{
+  owner="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChownR=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHOWNCOMMAND} -R ${owner} '${file}'" "Cannot change ownership of: ${file} to: ${owner}" "${msgType}"
+    ret_commandChownR="${ret_runCommand}"
+    return 0
+  else
+    ret_commandChownR=1
+    printMsg "Cannot change ownership of: ${file} to: ${owner}. Path doesn't exist" "cmd"
+  fi
+}
+
+commandChownRIfExist ()
+{
+  owner="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChownR=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHOWNCOMMAND} -R ${owner} '${file}'" "Cannot change ownership of: ${file} to: ${owner}" "${msgType}"
+    ret_commandChownR=${ret_runCommand}
+    return 0
+  fi
+}
+
+
+commandChmod ()
+{
+  perm="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChmod=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHMODCOMMAND} ${perm} '${file}'" "Cannot set permissions attributes for: ${file} to: ${perm}" "${msgType}"
+    ret_commandChmod=${ret_runCommand}
+    return 0
+  else
+    ret_commandChmod=1
+    printMsg "Cannot set permissions attributes for: ${file} to: ${perm}. Path doesn't exist" "cmd"
+  fi
+}
+
+commandChmodR ()
+{
+  perm="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChmodR=0
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    runCommand "${CHMODCOMMAND} -R ${perm} '${file}'" "Cannot set permissions attributes for: ${file} to: ${perm}" "${msgType}"
+    ret_commandChmodR="${ret_runCommand}"
+  else
+    ret_commandChmodR=1
+    printMsg "Cannot set permissions attributes for: ${file} to: ${perm}. Path doesn't exist" "cmd"
+  fi
+}
+
+commandInstall ()
+{
+  owner="$1"
+  group="$2"
+  perm="$3"
+  fileSource="$4"
+  fileDest="$5"
+  msgType="$6"
+  ret_commandInstall=0
+
+  if [ -f "${fileSource}" ];
+  then
+    runCommand "${INSTALLCOMMAND} -g ${group} -m ${perm} -o ${owner} '${fileSource}' '${fileDest}'" \
+               "Cannot install file: ${fileSource}" "${msgType}"
+    ret_commandInstall=${ret_runCommand}
+    return 0
+  else
+    ret_commandInstall=1
+    printMsg "Cannot install: ${fileSource}. Path doesn't exist" "cmd"
+  fi
+}
+
+commandBackupFile ()
+{
+  fileSrc="$1"
+  fileSuffix="$2"
+  msgType="$3"
+
+  ret_commandBackupFile=0
+
+  if [ -f "${fileSrc}" ];
+  then
+    runCommand "${CPCOMMAND} -fp '${fileSrc}' '${fileSrc}.${fileSuffix}'" "Cannot do backup of: ${fileSrc}" "${msgType}"
+    ret_commandBackupFile=${ret_runCommand}
+
+    return 0
+  else
+
+    ret_commandBackupFile=1
+
+    printMsg "Cannot do backup of: ${fileSrc}. File doesn't exist" "cmd"
+  fi
+}
+
+commandBackupMvFile ()
+{
+  fileSrc="$1"
+  fileSuffix="$2"
+  msgType="$3"
+
+  ret_commandBackupMvFile=0
+
+  if [ -f "${fileSrc}" ];
+  then
+    runCommand "${CPCOMMAND} -f '${fileSrc}' '${fileSrc}.${fileSuffix}'" "Cannot do backup of: ${fileSrc}" "${msgType}"
+    if [ ${ret_runCommand} = 0 ];
+    then
+      commandRm "${fileSrc}" "${msgType}"
+      ret_commandBackupMvFile="${ret_commandRm}"
+      return 0
+    fi
+  else
+    ret_commandBackupMvFile=1
+    printMsg "Cannot do backup of: ${fileSrc}. File doesn't exist" "cmd"
+  fi
+}
+
+commandCp ()
+{
+  fileSrc="$1"
+  fileDst="$2"
+  msgType="$3"
+
+  ret_commandCp=0
+
+  if [ -f "${fileSrc}" ];
+  then
+    runCommand "${CPCOMMAND} -f '${fileSrc}' '${fileDst}'" "Cannot copy: ${fileSrc} to: ${fileDst}" "${msgType}"
+    ret_commandCp="${ret_runCommand}"
+    return 0
+  else
+    ret_commandCp=1
+    printMsg "Cannot copy: ${fileSrc} to: ${fileDst}. File doesn't exist" "cmd"
+  fi
+
+}
+
+commandCpDir ()
+{
+  fileSrc="$1"
+  fileDst="$2"
+  msgType="$3"
+
+  if [ "x${system}" = "macosx" ] || [ "x${system}" = "xmacosx" ];
+  then
+    CP_OPTION="-pRP"
+  else
+    CP_OPTION="-pa"
+  fi
+
+  ret_commandCpDir=0
+
+  if [ -d "${fileSrc}" ];
+  then
+    runCommand "${CPCOMMAND} ${CP_OPTION} '${fileSrc}' '${fileDst}'" "Cannot copy: ${fileSrc} to: ${fileDst}" "${msgType}"
+    ret_commandCpDir="${ret_runCommand}"
+    return 0
+  else
+    ret_commandCpDir=1
+    printMsg "Cannot copy: ${fileSrc} to: ${fileDst}. File doesn't exist" "cmd"
+  fi
+
+}
+
+commandRestoreFile ()
+{
+  fileSrc="$1"
+  fileSuffix="$2"
+  msgType="$3"
+
+  ret_commandRestoreFile=0
+
+  if [ "x${fileSuffix}" = "x" ];
+  then
+    fileSuffix="tmp"
+  fi
+
+  if [ "x${msgType}" = "x" ];
+  then
+    msgType="nolog"
+  fi
+
+  fileaux="${fileSrc}.${fileSuffix}"
+  commandCp "${fileaux}" "${fileSrc}" ${msgType}
+  if [ "x${ret_commandCp}" = "x0" ];
+  then
+    commandRm "${fileaux}"  "nolog"
+    ret_commandRestoreFile=${ret_commandRm}
+  else
+    ret_commandRestoreFile=1
+  fi
+}
+
+commandChownChmod ()
+{
+  owner="$1"
+  perm="$2"
+  file="$3"
+  msgType="$4"
+
+  commandChown "${owner}" "${file}" "${msgType}"
+  commandChmod "${perm}" "${file}" "${msgType}"
+}
+
+commandChownChmodIfExist ()
+{
+  owner="$1"
+  perm="$2"
+  file="$3"
+  msgType="$4"
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    commandChownChmod "${owner}" "${perm}" "${file}" "${msgType}"
+  fi
+}
+
+commandChownChmodSuid ()
+{
+  owner="$1"
+  perm="$2"
+  file="$3"
+  msgType="$4"
+
+  commandChownChmod "${owner}" "${perm}" "${file}" "${msgType}"
+  commandChmod "u+s" "${file}" "${msgType}"
+}
+
+commandChownChmodSuidIfExist ()
+{
+  owner="$1"
+  perm="$2"
+  file="$3"
+  msgType="$4"
+
+  if [ -f "${file}" ] || [ -d "${file}" ];
+  then
+    commandChownChmodSuid "${owner}" "${perm}" "${file}" "${msgType}"
+  fi
+}
+
+commandChownChmodGuid ()
+{
+  owner="$1"
+  perm="$2"
+  file="$3"
+  msgType="$4"
+
+  commandChownChmod "${owner}" "${perm}" "${file}" "${msgType}"
+  commandChmod "g+s" "${file}" "${msgType}"
+}
+
+commandRm ()
+{
+  file="$1"
+  msgType="$2"
+
+  runCommand "$RMCOMMAND -f '${file}'" "Cannot remove file: ${file}" "${msgType}"
+  ret_commandRm=${ret_runCommand}
+}
+
+commandRmIfExist ()
+{
+  file="$1"
+  msgType="$2"
+
+  ret_commandRmIfExist=0
+
+  if [ -f "${file}" ];
+  then
+    commandRm "${file}" "${msgType}"
+    ret_commandRmIfExist="${ret_runCommand}"
+    return 0
+  fi
+
+  return 0
+}
+
+commandRmFiles ()
+{
+  file="$1"
+  msgType="$2"
+
+  runCommand "$RMCOMMAND -f '${file}'*" "Cannot remove files: ${file}*" "${msgType}"
+  ret_commandRmFiles="${ret_runCommand}"
+}
+
+commandRmTmp ()
+{
+  file="$1"
+  msgType="$2"
+
+  runCommand "$RMCOMMAND -f '${file}'" "Cannot remove temporary file: ${file}" "${msgType}"
+  ret_commandRmTmp="${ret_runCommand}"
+}
+
+commandRmTmpIfExist ()
+{
+  file="$1"
+  msgType="$2"
+
+  ret_commandRmTmpIfExist=0
+
+  if [ -f "${file}" ];
+  then
+    commandRmTmp "${file}" "${msgType}"
+    ret_commandRmTmpIfExist="${ret_commandRmTmp}"
+  fi
+}
+
+commandRmDir ()
+{
+  directory="$1"
+  msgType="$2"
+
+  runCommand "${RMDIRCOMMAND} '${directory}'" "Cannot remove directory: ${directory}" "${msgType}"
+  ret_commandRmDir="${ret_runCommand}"
+}
+
+commandRmDirIfExistEmpty ()
+{
+  directory="$1"
+  msgType="$2"
+
+  ret_commandRmDirIfExistEmpty=0
+
+  if [ ! -d "${directory}" ];
+  then
+    return
+  fi
+
+  if [ "$(${LSCOMMAND} -1A "${directory}")" ];
+  then
+    return
+  fi
+
+  commandRmDir "${directory}" "${msgType}"
+  ret_commandRmDirIfExistEmpty="${ret_commandRmDir}"
+}
+
+commandRmDirRecursively ()
+{
+  directory="$1"
+  msgType="$2"
+
+  runCommand "${RMCOMMAND} -fr '${directory}'" "Cannot remove recursively directory: ${directory}" "${msgType}"
+  ret_commandRmDirRecursively="${ret_runCommand}"
+
+}
+
+commandMkDir ()
+{
+  directory="$1"
+  msgType="$2"
+
+  ret_commandMkDir=0
+
+  if [ ! -d "${directory}" ];
+  then
+    runCommand "${MKDIRCOMMAND} -p '${directory}'" "Cannot create directory: ${directory}" "${msgType}"
+    ret_commandMkDir="${ret_runCommand}"
+  fi
+
+  return 0
+}
+
+commandMv ()
+{
+  fileSrc="$1"
+  fileDst="$2"
+  msgType="$3"
+
+  if [ -f "${fileSrc}" ];
+  then
+    runCommand "${MVCOMMAND} '${fileSrc}' '${fileDst}'" "Cannot move file: ${fileSrc} to: ${fileDst}" "${msgType}"
+    ret_commandMv="${ret_runCommand}"
+  else
+    ret_commandMv=1
+    printMsg "Cannot move file: ${fileSrc} to: ${fileDst}. Source file doesn't exist" "cmd"
+  fi
+}
+
+commandMvIfExist ()
+{
+  fileSrc="$1"
+  fileDst="$2"
+  msgType="$3"
+
+  if [ -f "${fileSrc}" ];
+  then
+    runCommand "${MVCOMMAND} '${fileSrc}' '${fileDst}'" "Cannot move file: ${fileSrc} to: ${fileDst}" "${msgType}"
+    ret_commandMv="${ret_runCommand}"
+  fi
+}
+
+commandChcon ()
+{
+  selinuxContext="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChcon=0
+
+  if [ "x$SELINUX_ENABLED" = "x1" ];
+  then
+    runCommand "${CHCONCOMMAND} -t '${selinuxContext}' '${file}'" "Cannot change context for: ${file} to: ${selinuxContext}" "${msgType}"
+    ret_commandChcon="${ret_runCommand}"
+  fi
+
+  return 0
+}
+
+commandChconR ()
+{
+  selinuxContext="$1"
+  file="$2"
+  msgType="$3"
+
+  ret_commandChcon=0
+
+  if [ "x$SELINUX_ENABLED" = "x1" ];
+  then
+    runCommand "${CHCONCOMMAND} -R -t '${selinuxContext}' '${file}'" "Cannot change context for: ${file} to: ${selinuxContext}" "${msgType}"
+    ret_commandChcon="${ret_runCommand}"
+  fi
+
+  return 0
+}
+
+commandRestoreCon ()
+{
+  file="$1"
+  msgType="$2"
+
+  ret_commandRestoreCon=0
+
+  if [ "x$SELINUX_ENABLED" = "x1" ];
+  then
+    runCommand "${RESTORECONCOMMAND} -v '${file}'" "Cannot restore selinux context for: ${file}" "${msgType}"
+    ret_commandRestoreCon="${ret_runCommand}"
+  fi
+
+  return 0
+}
+
+commandRestoreConR ()
+{
+  file="$1"
+  msgType="$2"
+
+  ret_commandRestoreCon=0
+
+  if [ "x$SELINUX_ENABLED" = "x1" ];
+  then
+    runCommand "${RESTORECONCOMMAND} -v -R '${file}'" "Cannot restore selinux context for: ${file}" "${msgType}"
+    ret_commandRestoreCon="${ret_runCommand}"
+  fi
+
+  return 0
+}
+
+commandTouch ()
+{
+  file="$1"
+  msgType="$2"
+
+  if [ ! -f "${file}" ];
+  then
+    runCommand "${TOUCHCOMMAND} '${file}'" "Cannot create file: ${file}" "${msgType}"
+    ret_commandTouch="${ret_runCommand}"
+  else
+    ret_commandTouch=0
+    printMsg "Cannot create file: ${file}. File already exists" "cmd"
+  fi
+}
+
+commandLn ()
+{
+  fileSrc="$1"
+  fileDst="$2"
+  msgType="$3"
+
+  ret_commandLn=0
+
+  if [ -f "${fileSrc}" ];
+  then
+    if [ ! -h "${fileDst}" ];
+    then
+      runCommand "${LNCOMMAND} -s '${fileSrc}' '${fileDst}'" "Cannot create symlink: ${fileSrc} to ${fileDst}" "${msgType}"
+      ret_commandLn="${ret_runCommand}"
+    else
+      ret_commandLn=1
+      printMsg "Cannot create symlink. Destination file already exists: ${fileDst}" "cmd"
+    fi
+  else
+    ret_commandLn=1
+    printMsg "Cannot create symlink to: ${fileDst}. Source file not found: ${fileSrc}" "cmd"
+  fi
+}
+
+commandUnlink ()
+{
+  file="$1"
+  msgType="$2"
+
+  ret_commandUnlink=0
+
+  if [ -f "${file}" ];
+  then
+    runCommand "${UNLINKCOMMAND} '${file}'" "Cannot unlink file: ${file}" "${msgType}"
+
+    ret_commandUnlink="${ret_runCommand}"
+  else
+    ret_commandUnlink=1
+
+    printMsg "Cannot unlink file: ${file}. File not found." "cmd"
+  fi
+}
+
+commandKill ()
+{
+  pid=$1
+
+  runCommand "${KILLCOMMAND} -9 '${pid}'" "Cannot kill process: ${pid}" "${msgType}"
+
+  ret_commandKill="${ret_runCommand}"
+}
+
+commandKillAll ()
+{
+  app=$1
+  msgType="$2"
+
+  runCommand "${KILLALLCOMMAND} ${app}" "Cannot kill processes: ${app}" "${msgType}"
+
+  ret_commandKillAll="${ret_runCommand}"
+}
+
+commandKillAllIfExist ()
+{
+  app=$1
+  msgType="$2"
+
+  ret_commandKillAllIfExist=0
+
+  out_ps=$(${PSCOMMAND} ax | ${GREPCOMMAND} "/${app} \|/${app}$\|${app} \|${app}$" | ${GREPCOMMAND} -v grep 2>/dev/null)
+
+  if [ "x${out_ps}" != "x" ];
+  then
+    commandKillAll "${app}" "${msgType}"
+
+    ret_commandKillAllIfExist=${ret_commandKillAll}
+  fi
+}
+
+commandTccutilReset()
+{
+  service="$1"
+  bundleId="$2"
+  msgType="$3"
+
+  runCommand "$TCCUTILCOMMAND reset $service $bundleId" "Cannot reset service: $service for bundle: $bundleId" "$msgType"
+  ret_commandTccutilReset="$ret_runCommand"
+}
+
+whichPath ()
+{
+  which_out=""
+  if [ "x$1" != "x" ];
+  then
+    which_out=$(${WHICHCOMMAND} $1 2>/dev/null | ${HEADCOMMAND} -1 | ${GREPCOMMAND} -v "no $1 in" 2>/dev/null | $CATCOMMAND)
+  fi
+}
+
+pathBin=(/usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin)
+
+findPath ()
+{
+  tool_name="$1"
+
+  ret_findPath=""
+
+  for i in ${pathBin[@]}; do
+    if [ -x "$i/${tool_name}" ];
+    then
+      ret_findPath="$i/${tool_name}"
+      return 0
+    fi
+  done
+}
+
+getToolPath ()
+{
+  tool_name="$1"
+
+  ret_getToolPath=""
+
+  if [ "x${tool_name}" = "x" ];
+  then
+    return 0
+  fi
+
+  whichPath "${tool_name}"
+  if [ "x${which_out}" != "x" ];
+  then
+    ret_getToolPath="${which_out}"
+    return 0
+  fi
+
+  findPath "${tool_name}"
+  if [ "x${ret_findPath}" != "x" ];
+  then
+    ret_getToolPath="${ret_findPath}"
+    return 0
+  fi
+}
+
+getInstallPath()
+{
+
+  printMsgDebug "getInstallPath: (${NX_PATH_DEFAULT},${NX_PATH_ENV},${NX_PATH_RELOCATE})"
+
+  if [ "x${NX_PATH_DEFAULT}" = "x" ];
+  then
+    if [ "${system}" = "solaris" ];
+    then
+      NX_PATH_DEFAULT="/opt"
+    else
+      NX_PATH_DEFAULT="/usr"
+    fi
+  fi
+
+  if [ "x${NX_PATH_ENV}" != "x" ];
+  then
+    INSTALL_PATH="${NX_PATH_ENV}"
+    return 0
+  fi
+
+  getPackagePath "$PACKAGE_NAME"
+
+  if [ "x$ret_packagePath" != "x" ];
+  then
+    INSTALL_PATH="$($DIRNAMECOMMAND "$ret_packagePath")"
+    return 0
+  fi
+  
+  if [ "x${NX_PATH_RELOCATE}" != "x" ];
+  then
+    INSTALL_PATH="${NX_PATH_RELOCATE}"
+    return 0
+  fi
+
+  INSTALL_PATH="${NX_PATH_DEFAULT}"
+  return 0
+}
+
+getInstallationPath()
+{
+  printMsgDebug "getInstallationPath"
+  ret_getInstallationPath=0
+
+  removeSlashAtTheEnd "${DEFAULT_PREFIX}"
+  NX_PATH_DEFAULT="${dirName}"
+
+  removeSlashAtTheEnd "${NX_INSTALL_PREFIX}"
+  NX_PATH_ENV="${dirName}"
+
+  removeSlashAtTheEnd "${RPM_INSTALL_PREFIX0}"
+  NX_PATH_RELOCATE="${dirName}"
+
+  getInstallPath
+  ret_getInstallationPath=ret_getInstallPath
+}
+
+isNewestConfFileVersion ()
+{
+  printMsgDebug "isNewestConfFileVersion($1)"
+  ret_isNewestConfFileVersion=0
+
+  package_name="$1"
+
+  if [ "x${package_name}" = "x" ];
+  then
+    package_name="${PACKAGE_NAME}"
+  fi
+
+  getInstallationPath
+
+  getCfgFileVersion "${package_name}" "${INSTALL_PATH}/NX"
+
+  printMsgDebug "isNewestConfFileVersion: ${ret_getCfgFileVersion}, ${cfg_version}"
+
+  if [ "x${cfg_version}" = "x4.0" ];
+  then
+    printMsgDebug "isNewestConfFileVersion: A newer config file is already installed (${ret_getConfigFileVersion})."
+
+    ret_isNewestConfFileVersion=1
+  elif [ "x${cfg_version}" = "x" ];
+  then
+    printMsgDebug "isNewestConfFileVersion: Cannot stat config file for installation."
+
+    ret_isNewestConfFileVersion=1
+  else
+    printMsgDebug "isNewestConfFileVersion: An older config file is installed (${ret_getConfigFileVersion})."
+  fi
+}
+
+isInstalledClient3 ()
+{
+  printMsgDebug "isInstalledClient3()"
+  ret_isInstalledClient3=0
+
+  if [ -f "${NX_ROOT}/bin/nxkill" ] || [ -f "${NX_ROOT}/bin/nxservice" ];
+  then
+    ret_isInstalledClient3=1
+  fi
+
+  printMsgDebug "isInstalledClient3(return ${ret_isInstalledClient3})"
+}
+
+printHelpSystemInfo ()
+{
+  ${ECHOCOMMAND} "The specified SYSTEM must be one of the following operating systems."
+  ${ECHOCOMMAND} "If not the NoMachine setup will try to autodetect the system or will choose"
+  ${ECHOCOMMAND} "the layout that better resembles one of the known OS."
+  ${ECHOCOMMAND} ""
+  ${ECHOCOMMAND} "       redhat       Red Hat Enterprise 4 and later."
+  ${ECHOCOMMAND} "       suse         SLED 10 and later, SLES 10 and later, Open SUSE 10 and later."
+  ${ECHOCOMMAND} "       slackware"
+  ${ECHOCOMMAND} "       mandriva     Mandriva 2009 and later."
+  ${ECHOCOMMAND} "       debian       Debian 4.0 and later."
+  ${ECHOCOMMAND} "                    Ubuntu 8.04 and later."
+  ${ECHOCOMMAND} "       fedora       Fedora 10 and later."
+}
+
+updatePathsInFile ()
+{
+  file="$1"
+  updatePathsInFile=0
+
+  if [ ! -f "${file}" ];
+  then
+    printMsg "Cannot update paths. File not found: ${file}" "cmd"
+    updatePathsInFile=1
+    return 0
+  fi
+
+  if [ "${NX_ROOT}" != "/usr/NX" ];
+  then
+    ${SEDCOMMAND} -e 's:/usr/NX:'"${NX_ROOT}"':' "${file}" > "${file}".sed
+    commandMv "${file}.sed" "${file}"
+  fi
+}
+
+startNXHtd()
+{
+  ret_startNXHtd=0
+
+  out=$("${NXSHELL}" --restart htd)
+
+  out_grep=$(${ECHOCOMMAND} "$out" | ${GREPCOMMAND} "Enabled service.*htd")
+  if [ "x${out_grep}" != "x" ];
+  then
+    ret_startNXHtd=0
+    return 0
+  fi
+
+  out_grep=$(${ECHOCOMMAND} "$out" | ${GREPCOMMAND} ERROR)
+  if [ "x${out_grep}" != "x" ];
+  then
+    out_grep=$(${ECHOCOMMAND} "$out" | ${SEDCOMMAND} -e 's/NX> ... ERROR: //' 2>/dev/null)
+    printMsg "${out_grep}" "cmd"
+    setInstallationError
+    ret_startNXHtd=1
+  fi
+}
+
+startNXServer()
+{
+  silent_start=$1
+  checkssh=$2
+
+  if [ "x${silent_start}" = "x" ];
+  then
+    silent_start=0
+  fi
+
+  ret_startNXServer=0
+
+  if [ "x${silent_start}" = "x0" ];
+  then
+    if [ "x${SKIP_START_SERVER}" = "x1" ];
+    then
+      printMsg "Skipping start service: nxserver because of previous errors" "warn"
+
+      ret_startNXServer=1
+
+      return 0
+    fi
+
+    if [ "x${NX_MPKG_PACKAGE}" = "xplayer" ];
+    then
+      printMsg "Starting service: nxserver"
+    fi
+  fi
+
+  checkServerInstallation
+  if [ ${ret_checkServerInstallation} != 0 ];
+  then
+    if [ "x${silent_start}" = "x0" ];
+    then
+      if [ "x${SETUP_SCRIPT}" != "x1" ];
+      then
+        ${ECHOCOMMAND} "NX> 701 ERROR: Cannot start service: nxserver"
+      else
+        printMsg "Cannot start service: nxserver" "error"
+      fi
+
+      SKIP_START_SERVER=1
+    fi
+
+    ret_startNXServer=1
+    return 0
+  fi
+
+  if [ "x${checkssh}" = "xcheckssh" ] || [ "x${ONLYCHECKSSH}" != "x" ];
+  then
+    runCommand "'${NXSHELL}' --checkssh" "Cannot check SSH server keys" "cmd"
+
+    if [ ${ret_runCommand} = 0 ];
+    then
+      ret_startNXServer=0
+    else
+      ret_startNXServer=1
+    fi
+
+    return 0
+
+  else
+    initSystem=""
+
+    if [ -f /proc/1/comm ];
+    then
+      initSystem=$(${CATCOMMAND} /proc/1/comm)
+    fi
+
+    if [[ "x${initSystem}" = "xsystemd" ]]; 
+    then
+      if [ -d /run/systemd ];
+      then
+        runCommand "${SYSTEMCTLCOMMAND} restart nxserver.service" "Cannot enable systemd service: $1" "error"
+      else
+        printMsg "Dir /run/systemd doesn't exist" "warn"
+      fi
+    else
+      runCommand "'${NXSHELL}' --startup" "Cannot start NX server" "cmd"
+    fi
+  fi
+
+  if [ "x${outCommand}" = "x" ];
+  then
+    ret_startNXServer=0
+    return 0
+  fi
+
+  out_msg=$(${ECHOCOMMAND} "${outCommand}" | ${GREPCOMMAND} "NX> 122 Enabled service: nxserver")
+  if [ "x${out_msg}" != "x" ];
+  then
+    ret_startNXServer=0
+    return 0
+  fi
+
+  out_msg=$(${ECHOCOMMAND} "${outCommand}" | ${GREPCOMMAND} "NX> 500 Service: nxserver already enabled")
+  if [ "x${out_msg}" != "x" ];
+  then
+    ret_startNXServer=0
+    return 0
+  fi
+
+  out_msg=$(${ECHOCOMMAND} "${outCommand}" | ${GREPCOMMAND} "NX> 500 .*NX access is disabled")
+  if [ "x${out_msg}" != "x" ];
+  then
+    ret_startNXServer=0
+    return 0
+  fi
+
+  out_msg=$(${ECHOCOMMAND} "${outCommand}" | ${GREPCOMMAND} "NX> 500 .*Cannot start service.*nxserver")
+  if [ "x${out_msg}" != "x" ];
+  then
+    out_msg=$(${ECHOCOMMAND} "${outCommand}" | ${SEDCOMMAND} -e 's|ERROR: ||' | ${SEDCOMMAND} -e 's|^NX> [[:digit:]]\{3\} |NX> '"$PROCESS"' ERROR: |g' -e '/NX>.*Bye\..*/d')
+
+    if [ "x${silent_start}" = "x0" ];
+    then
+      ${ECHOCOMMAND} "${out_msg}"
+      setInstallationError
+
+      SKIP_START_SERVER=1
+    fi
+
+    ret_startNXServer=1
+    return 0
+  fi
+
+  if [ $ret_runCommand != 0 ];
+  then
+    if [ "x${silent_start}" = "x0" ];
+    then
+      if [ "x${SETUP_SCRIPT}" != "x1" ];
+      then
+        ${ECHOCOMMAND} "NX> 701 ERROR: Cannot start service: nxserver"
+      else
+        printMsg "Cannot start service: nxserver" "warn"
+      fi
+
+      SKIP_START_SERVER=1
+    fi
+
+    ret_startNXServer=1
+  fi
+
+  return 0
+}
+
+getArchOfFile ()
+{
+  file=$1
+
+  #0 - 32-bit;   1 - 64-bit;   2 - unknown
+  ret_getArchOfFile=2
+
+  if [ ! -e "$file" ];
+  then
+    ret_getArchOfFile=2
+    return 0
+  fi
+
+  out=$(${OBJDUMPCOMMAND} -f "$file" 2>/dev/null | ${GREPCOMMAND} ^architecture)
+  if [ "x${out}" != "x" ];
+  then
+    out_grep=$(${ECHOCOMMAND} "$out" | ${GREPCOMMAND} "x86.64")
+    if [ "x${out_grep}" != "x" ];
+    then
+      ret_getArchOfFile=1
+      return 0
+    fi
+
+    out_grep=$(${ECHOCOMMAND} "$out" | ${GREPCOMMAND} "i.86")
+    if [ "x${out_grep}" != "x" ];
+    then
+      ret_getArchOfFile=0
+      return 0
+    fi
+  fi
+
+  return 0
+}
+
+initializeLogFile ()
+{
+  if [ "x$1" = "x" ];
+  then
+    if [ "x${LOGFILE}" = "x" ];
+    then
+      LOGFILE="${UPDATELOG}"
+    fi
+  else
+    LOGFILE="${1}"
+  fi
+
+  createLogdirectory
+  startLog
+}
+
+isServerInstalled ()
+{
+  if [ -f "${SERVER_USR_CONFIG_FILE}" ];
+  then
+    ret_isServerInstalled=1
+    return 0
+  fi
+
+  ret_isServerInstalled=0
+  return 0
+}
+
+isPackageInstalled ()
+{
+  package_name="$1"
+
+  getConfigFileName "webplayer"
+
+  if [ -f "${ret_getConfigFileName}" ]
+  then
+    ret_isWebPlayerInstalled=1
+    return 0
+  fi
+
+  ret_isWebPlayerInstalled=0
+  return 0
+}
+
+canInstall ()
+{
+  #
+  # Par1 - product name, i.e. player, node, server, webplayer
+  #
+
+  printMsgDebug "canInstall: ($1)"
+
+  productName="${1}"
+  ret_canInstall=1
+
+  if [ "${productName}" = "server" ];
+  then
+    isInstalledProduct "player"
+
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      getProductName "player"
+
+      ret_canInstall=0
+    else
+      isInstalledProduct "node"
+
+      if [ ${ret_isInstalledProduct} = 1 ];
+      then
+        getProductName "node"
+
+        ret_canInstall=0
+      fi
+    fi
+
+  elif [ "${productName}" = "node" ];
+  then
+    isInstalledProduct "server"
+
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      getProductName "server"
+
+      ret_canInstall=0
+    else
+      isInstalledProduct "player"
+
+      if [ ${ret_isInstalledProduct} = 1 ];
+      then
+        getProductName "player"
+
+        ret_canInstall=0
+      fi
+    fi
+
+  elif [ "${productName}" = "player" ];
+  then
+    isInstalledProduct "server"
+
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      getProductName "server"
+
+      ret_canInstall=0
+    else
+      isInstalledProduct "node"
+
+      if [ ${ret_isInstalledProduct} = 1 ];
+      then
+        getProductName "node"
+
+        ret_canInstall=0
+      fi
+    fi
+  fi
+
+  if [ ${ret_canInstall} = 0 ];
+  then
+    ${ECHOCOMMAND} "Detected installation of $ret_getProductName package."
+
+    return 0
+  fi
+
+  requireOtherPackages=0
+
+  if [ "${productName}" = "webplayer" ];
+  then
+    isInstalledProduct "server"
+    if [ ${ret_isInstalledProduct} = 0 ];
+
+    then
+      getProductName "webplayer"
+
+      ${ECHOCOMMAND} "To install the $ret_getProductName, please be sure you have already"
+      ${ECHOCOMMAND} "installed a NoMachine package to make this host a server."
+
+      ret_canInstall=0
+    fi
+
+    return 0
+  elif [ "${productName}" = "usb" ];
+  then
+    isInstalledProduct "server"
+
+    if [ ${ret_isInstalledProduct} = 0 ];
+    then
+      isInstalledProduct "player"
+
+      if [ ${ret_isInstalledProduct} = 0 ];
+      then
+        requireOtherPackages=1
+      fi
+    fi
+
+    if [ ${requireOtherPackages} = 1 ];
+    then
+      ${ECHOCOMMAND} "NoMachine USB software can work only together with the NoMachine"
+      ${ECHOCOMMAND} "software: install a NoMachine client on client side and any"
+      ${ECHOCOMMAND} "of the NoMachine servers on server side."
+
+      ret_canInstall=0
+    fi
+  elif [ "${productName}" = "avc" ];
+  then
+    isInstalledProduct "server"
+
+    if [ ${ret_isInstalledProduct} = 0 ];
+    then
+      getProductName "avc"
+
+      ${ECHOCOMMAND} "To install the $ret_getProductName, please be sure you have already"
+      ${ECHOCOMMAND} "installed a NoMachine package to make this host a server."
+
+      ret_canInstall=0
+    fi
+
+    return 0
+  fi
+}
+
+canUninstall ()
+{
+  package_name="$1"
+
+  ret_canUninstall=1
+
+  if [ "x${package_name}" = "xserver" ];
+  then
+    isInstalledProduct "webplayer"
+
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      getProductName "webplayer"
+
+      ret_canUninstall=0
+
+      if [ ${ret_canUninstall} = 0 ];
+      then
+        ${ECHOCOMMAND} "To uninstall NoMachine, please be sure to uninstall the ${ret_getProductName} software and then retry"
+
+        return 0
+      fi
+    fi
+
+    isInstalledProduct "avc"
+
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      getProductName "avc"
+
+      ret_canUninstall=0
+
+      if [ ${ret_canUninstall} = 0 ];
+      then
+        ${ECHOCOMMAND} "To uninstall NoMachine, please be sure to uninstall the $ret_getProductName software and then retry"
+
+        return 0
+      fi
+    fi
+
+    return 0
+  fi
+}
+
+installAvc ()
+{
+  if [ ! -d /etc/NX ];
+  then
+    commandMkDir "/etc/NX"
+    removeETCNX=1
+  fi
+
+  preparePackageAtPostInstall "${PACKAGE_NAME}" "${PACKAGE_NAME}" "${operation}"
+
+  INSTALL_PATH="/usr"
+  NX_ROOT="${INSTALL_PATH}/NX"
+
+  copyInstallationFilesFromTmp "${TMP_FOLDER}/NX" "${INSTALL_PATH}"
+
+  if [ -f "${NX_ROOT}/codec/etc/codec.lic.sample" ];
+  then
+
+    if [ -f "${NX_ROOT}/codec/etc/codec.lic" ];
+    then
+
+      commandMv "${NX_ROOT}/codec/etc/codec.lic" "${NX_ROOT}/codec/etc/codec.lic.backup"
+      commandChownChmod "root:${ROOTGNAME}" "0400" "${NX_ROOT}/codec/etc/codec.lic.backup"
+
+    fi
+
+    commandMv "${NX_ROOT}/codec/etc/codec.lic.sample" "${NX_ROOT}/codec/etc/codec.lic"
+  fi
+
+  commandChownChmod "root:${ROOTGNAME}" "0400" "${NX_ROOT}/codec/etc/codec.lic"
+
+  if [ "x${removeETCNX}" = "x1" ] || [ ! "$(${LSCOMMAND} -1A /etc/NX)" ];
+  then
+    commandRmDirIfExistEmpty "/etc/NX"
+  fi
+}
+
+removePackageFiles ()
+{
+  if [ "x${PACKAGE_NAME}" = "xavc" ];
+  then
+    commandRm "${NX_ROOT}/codec/lib/libav.so"
+    commandRm "${NX_ROOT}/codec/lib/libx264.so"
+    commandRmDirIfExistEmpty "${NX_ROOT}/codec/lib"
+
+    commandMv "${NX_ROOT}/codec/etc/codec.lic" "${NX_ROOT}/codec/etc/codec.lic.backup"
+    commandChownChmod "root:${ROOTGNAME}" "0400" "${NX_ROOT}/codec/etc/codec.lic.backup"
+
+    commandRmDirRecursively "${NX_ROOT}/codec/share"
+  fi
+}
+
+uninstall3 ()
+{
+  canUninstall3
+
+  if [ "x${ret_canUninstall3}" = "x0" ];
+  then
+    return 0
+  fi
+
+  isInstalled_3 "1"
+  if [ "x${ret_isInstalled_3}" != "x0" ] || [ ! -d /etc/NX ];
+  then
+    if [ -x /usr/NX/scripts/setup/nxmanager ];
+    then
+      /usr/NX/scripts/setup/nxmanager --uninstall
+    fi
+
+    if [ -x /usr/NX/scripts/setup/nxserver ];
+    then
+      /usr/NX/scripts/setup/nxserver --uninstall
+    fi
+
+    if [ -x /usr/NX/scripts/setup/nxnode ];
+    then
+      /usr/NX/scripts/setup/nxnode --uninstall
+    fi
+
+    #
+    # Remove nxrunner 3.X.
+    #
+
+    commandRmDirRecursively "/usr/NX/bin"
+    commandRmDirRecursively "/usr/NX/lib"
+    commandRmDirRecursively "/usr/NX/scripts"
+    commandRmDirRecursively "/usr/NX/share"
+  fi
+}
+
+canUninstall3 ()
+{
+  #
+  # This function is executed only on update from NX 3.X
+  #
+
+  package_name="$1"
+  ret_canUninstall3=1
+
+  if [ "x${package_name}" = "x" ];
+  then
+    package_name="${PACKAGE_NAME}"
+  fi
+
+  if [ "x${package_name}" = "xserver" ];
+  then
+
+    #
+    # nxserver package can be installed over any package 3.X
+    #
+
+    ret_canUninstall3=1
+
+    return 0
+  fi
+
+  if [ "x${package_name}" = "xnode" ];
+  then
+
+    #
+    # nxnode package can not be installed over nxserver 3.X.
+    #
+
+    if [ ! -d /etc/NX ] && [ -f /usr/NX/etc/server.lic ];
+    then
+      ${ECHOCOMMAND} "Software can be upgraded by a package that contains the same software."
+
+      ret_canUninstall3=0
+
+      exit 0
+    fi
+  fi
+
+  if [ "x${package_name}" = "xplayer" ];
+  then
+
+    #
+    # nxplayer package can not be installed over nxserver and nxnode 3.X
+    #
+
+    if [ ! -d /etc/NX ]
+    then
+      if [ -f /usr/NX/etc/node.lic ] || [ -f /usr/NX/etc/server.lic ];
+      then
+        ${ECHOCOMMAND} "Software can be upgraded by a package that contains the same software."
+
+        ret_canUninstall3=0
+
+        exit 0
+      fi
+    fi
+  fi
+}
+
+getLicenseAcronym ()
+{
+  license_file="$1"
+
+  ret_getLicenseAcronym=""
+
+  default_lic=1
+  if [ "x${license_file}" != "x" ];
+  then
+    default_lic=0
+  fi
+
+  if [ "x${LICENSE_ACRONYM}" != "x" ] && [ ${default_lic} = 1 ];
+  then
+
+    #
+    # When already set for default license.
+    #
+
+    return 0
+  fi
+
+  if [ "x${license_file}" = "x" ];
+  then
+
+    if [ "x${LICENSE_FILE}" != "x" ];
+    then
+
+      if [ "x${NX_MPKG_PACKAGE}" = "xnode" ];
+      then
+        if [ -f "${NX_ROOT}/etc/node.lic" ];
+        then
+          license_file="${NX_ROOT}/etc/node.lic"
+        else
+          license_file="${NX_ROOT}/etc/server.lic"
+        fi
+      else
+        license_file="${LICENSE_FILE}"
+      fi
+
+    else
+      if [ "x${NX_MPKG_PACKAGE}" = "xnode" ];
+      then
+        if [ -f "${NX_ROOT}/etc/node.lic" ];
+        then
+          license_file="${NX_ROOT}/etc/node.lic"
+        else
+          license_file="${NX_ROOT}/etc/server.lic"
+        fi
+      else
+        license_file="${NX_ROOT}/etc/server.lic"
+      fi
+
+    fi
+  fi
+
+  if [ -f "${license_file}" ];
+  then
+    file_lic="${license_file}"
+
+  elif [ -f "${license_file}.sample" ];
+  then
+    file_lic="${license_file}.sample"
+
+  else
+    printMsg "Cannot find license file to read an acronym" "warn"
+    return 0
+  fi
+
+  ret_getLicenseAcronym=$(${AWKCOMMAND} '/^Product Id/ {print $3}' \
+                                        "${file_lic}")
+
+  if [ "x${ret_getLicenseAcronym}" = "x" ];
+  then
+    printMsg "Error while reading an acronym from license file: ${file_lic}" "warn"
+
+    return 0
+  fi
+
+  if [ ${default_lic} = 1 ];
+  then
+
+    #
+    # Set global LICENSE_ACRONYM variable only in case 
+    # of reading default license file.
+    #
+
+    LICENSE_ACRONYM=${ret_getLicenseAcronym}
+  fi
+}
+
+licenseTypeFromAcronym ()
+{
+  if [ "${1}" = Ux ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Update"
+  elif [ "${1}" = Ex ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Evaluation"
+  elif [ "${1}" = Sx ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Subscription"
+  elif [ "${1}" = SEx ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Single Evaluation"
+  elif [ "${1}" = SSx ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Single Subscription"
+  elif [ "${1}" = PSx ]; then
+    NOMACHINE_LICENSE_POSTFIX=" Premium Subscription"
+  else
+    NOMACHINE_LICENSE_POSTFIX=""
+  fi
+}
+
+serverVersionFromAcronym ()
+{
+  ACTUAL_LICENSE_ACRONYM="${1}"
+  POSTFIX_TAB=("x" "Ux" "Ex" "Sx" "PSx" "SSx" "SEx")
+  NOMACHINE_LICENSE_POSTFIX=""
+
+  acronym_first_letter=""
+
+  #
+  # Checking license for linux ARM packages.
+  #   First letter of license for linux ARM
+  #   packages changed from "L" to "R". 
+  #
+
+  acronym_first_letter="${ACTUAL_LICENSE_ACRONYM:0:1}"
+
+  if [ "${acronym_first_letter}x" = "Rx" ]
+  then
+    ACTUAL_LICENSE_ACRONYM=$("${ECHOCOMMAND}" "${ACTUAL_LICENSE_ACRONYM}" | "${SEDCOMMAND}" 's/^R/L/g')
+  fi
+
+  for i in ${POSTFIX_TAB[@]};
+  do
+    licenseTypeFromAcronym "$i"
+
+    if [ "${ACTUAL_LICENSE_ACRONYM}x" = "LS${i}" ];
+    then
+      NOMACHINE_EXTENSION="${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LED${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Desktop${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LES${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LTS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Terminal Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LTSC{i}" ];
+    then
+      NOMACHINE_EXTENSION=" Terminal Server Cluster${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LETS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Terminal Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LSBS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Small Business Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LSBCS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Small Business Cloud Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LSBTS{i}" ];
+    then
+      NOMACHINE_EXTENSION=" Small Business Terminal Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LW${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Workstation${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LEN${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Node${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LTSN${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Terminal Server Node${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LETSN${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Terminal Server Node${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LP${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Pro${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LQS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Quick Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LCS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Cloud Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LECSC${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Cloud Server Cluster${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    elif [ "${ACTUAL_LICENSE_ACRONYM}x" = "LECS${i}" ];
+    then
+      NOMACHINE_EXTENSION=" Enterprise Cloud Server${NOMACHINE_LICENSE_POSTFIX}"
+      break
+    fi
+  done
+}
+
+checkInstallationPathPermissions ()
+{
+  initial=$("${PWDCOMMAND}")
+  actual="${INSTALL_PATH}"
+
+  while [ ! -d "${actual}" ]
+  do
+    if [[ -L "${actual}" && -d "${actual}" ]]
+    then
+      actual="${actual}/"
+    else
+      actual=$("${ECHOCOMMAND}" ${actual%/*})
+    fi
+  done
+  
+  cd "${actual}"
+
+  while [ "${actual}x" != "/x" ]
+  do
+    cd ..
+
+    dirperms=$("${LSCOMMAND}" -ld "${actual}/")
+    dirperms=$("${ECHOCOMMAND}" "${dirperms}" | "${CUTCOMMAND}" -d " " -f 1)
+
+    if [ $("${ECHOCOMMAND}" "${dirperms:4:1}") != "r" ] || \
+       !([ $("${ECHOCOMMAND}" "${dirperms:6:1}") = "x" ] || \
+         [ $("${ECHOCOMMAND}" "${dirperms:6:1}") = "s" ]) || \
+         [ $("${ECHOCOMMAND}" "${dirperms:7:1}") != "r" ] || \
+       !([ $("${ECHOCOMMAND}" "${dirperms:9:1}") = "x" ] || \
+         [ $("${ECHOCOMMAND}" "${dirperms:9:1}") = "s" ] || \
+         [ $("${ECHOCOMMAND}" "${dirperms:9:1}") = "t" ]);
+    then
+      printMsg "It seems that you are trying to install this package in a directory without proper permissions. Please try to install it in a different" 0
+      printMsg "directory or change permissions. The installation directory should" 0
+      printMsg "have at least 555 permissions set." 0
+
+      exit 1
+    fi
+
+    actual=$("${PWDCOMMAND}")
+
+  done
+
+  cd "${initial}"
+}
+
+compareLicDate ()
+{
+  local licFile="$1"
+
+  compareLicDate_ret=0
+  
+  licDate="$("$CATCOMMAND" "$licFile" | "$GREPCOMMAND" "Expiry" 2>/dev/null | "$SEDCOMMAND" 's/Expiry: *//g')"
+  licDateSince1970="$("$DATECOMMAND" -d "$licDate" +%s)"
+  nowDateSince1970="$("$DATECOMMAND" +%s)"
+
+  if [ "$licDateSince1970" -lt "$nowDateSince1970" ];
+  then
+    compareLicDate_ret=1
+  fi
+}
+
+checkLicenseExpirationDate ()
+{
+  if [ -x "$NXSHELL" ]
+  then
+    checkStr="$("${NXSHELL}" --subscription | "${GREPCOMMAND}" "expired" || true)"
+
+    if [ "x${checkStr}" != "x" ];
+    then
+      printMsgInstall " " 0
+      printMsgInstall "Your NoMachine subscription is expired, updating the software is no longer permitted." 0
+      printMsgInstall "Please contact your NoMachine provider or the Support Team for renewal options." 0
+      printMsgInstall " " 0
+
+      exit 1
+    fi
+  fi
+}
+
+compareLicenseAcronyms ()
+{
+  ret_compareLicenseAcronyms=1
+  
+  new_license_acronym="${1}"
+  old_license_acronym="${2}"
+  
+  new_license_acronym_sed=""
+
+  new_acronym_first_letter=""
+  old_acronym_first_letter=""
+
+  #
+  # Checking license for linux ARM packages.
+  #  First letter of license for linux ARM
+  #  packages changed from "L" to "R". 
+  #
+
+  new_acronym_first_letter="${new_license_acronym:0:1}"
+  old_acronym_first_letter="${old_license_acronym:0:1}"
+
+  if [ "${new_acronym_first_letter}x" = "Rx" ] && [ "${old_acronym_first_letter}x" = "Lx" ]
+  then
+    old_license_acronym=$("${ECHOCOMMAND}" "${old_license_acronym}" | "${SEDCOMMAND}" 's/^L/R/g')
+  fi
+
+  if [ "${new_license_acronym}" = "${old_license_acronym}" ];
+  then 
+    ret_compareLicenseAcronyms=0
+    
+  elif [ "${new_license_acronym}" != "${old_license_acronym}" ];
+  then
+    new_license_acronym_sed=$(${ECHOCOMMAND} "${new_license_acronym}" | \
+                            ${SEDCOMMAND} s'/.$//')
+    
+    if [ "x${new_license_acronym: -1}" = "xU" ] || \
+       [ "x${new_license_acronym: -1}" = "xE" ];
+    then 
+      if [ "${new_license_acronym_sed}E"  = "${old_license_acronym}" ] || \
+         [ "${new_license_acronym_sed}S"  = "${old_license_acronym}" ] || \
+         [ "${new_license_acronym_sed}SE" = "${old_license_acronym}" ] || \
+         [ "${new_license_acronym_sed}SS" = "${old_license_acronym}" ] || \
+         [ "${new_license_acronym_sed}PS" = "${old_license_acronym}" ] || \
+         [ "${new_license_acronym_sed}"   = "${old_license_acronym}" ];
+      then 
+        ret_compareLicenseAcronyms=0
+      fi
+    fi
+  fi
+}
+
+checkCustomAcronym ()
+{
+
+  #
+  # Checking custom acronym is used only for
+  #   normal linux packages. It does not apply
+  #   to the ARM packages so "L" can be hardcoded.
+  #
+
+  old_acronym="${1}"
+  replacement_acronym="${2}"
+  test_acronym="${3}"
+
+  if [[ "${test_acronym}" != "" ]]
+  then
+    if [[ "${old_acronym}" = "L${test_acronym}E" ]];
+    then
+      old_acronym="L${replacement_acronym}E"
+    elif [[ "${old_acronym}" = "L${test_acronym}S" ]];
+    then
+      old_acronym="L${replacement_acronym}S"
+    elif [[ "${old_acronym}" = "L${test_acronym}SE" ]];
+    then
+      old_acronym="L${replacement_acronym}SE"
+    elif [[ "${old_acronym}" = "L${test_acronym}SS" ]];
+    then
+      old_acronym="L${replacement_acronym}SS"
+    elif [[ "${old_acronym}" = "L${test_acronym}PS" ]];
+    then
+      old_acronym="L${replacement_acronym}PS"
+    fi
+  fi
+
+  #
+  # Checking if new and old acronyms match
+  #
+
+  compareLicenseAcronyms "${NEW_LICENSE_ACRONYM}" "${old_acronym}"
+
+  ret_checkCustomAcronym=${ret_compareLicenseAcronyms}
+}
+
+updateOnlyIfServerIsTheSame ()
+{
+  is_runner="${1}"
+
+  if [ -f "${NX_ROOT}/etc/DisableBlockingScript" ];
+  then
+    rm "${NX_ROOT}/etc/DisableBlockingScript"
+
+    return 0
+  fi
+
+  if [ -f "${NX_ROOT}/bin/nxserver.bin" ];
+  then
+    if [ -f "${NX_ROOT}/etc/server.lic" ];
+    then
+      getLicenseAcronym "${NX_ROOT}/etc/server.lic"
+      OLD_LICENSE_ACRONYM="${ret_getLicenseAcronym}"
+      IS3INSTALLED=$(grep "Product:" "${NX_ROOT}/etc/server.lic")
+      LICENSE3_TYPE="${NX_ROOT}/etc/server.lic"
+    elif [ -f "${NX_ROOT}/etc/node.lic" ];
+    then
+      getLicenseAcronym "${NX_ROOT}/etc/node.lic"
+      OLD_LICENSE_ACRONYM="${ret_getLicenseAcronym}"
+      IS3INSTALLED=$(grep "Product:" "${NX_ROOT}/etc/node.lic")
+      LICENSE3_TYPE="${NX_ROOT}/etc/node.lic"
+    else
+      return 0
+    fi
+  else
+    return 0
+  fi
+
+  if [ "x${OLD_LICENSE_ACRONYM}" = "x" ];
+  then
+    return 0
+  fi
+
+  if [[ "${IS3INSTALLED}x" = *NX*x ]];
+  then
+    if [[ "${IS3INSTALLED}x" = *NX\ Small\ Business\ Server*x ]];
+    then
+      LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c5-)
+      OLD_LICENSE_ACRONYM="LSBS${LIC_PSTFIX}"
+    elif [[ "${IS3INSTALLED}x" = *NX\ Free\ Edition*x ]];
+    then
+      LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c4-)
+      OLD_LICENSE_ACRONYM="LS${LIC_PSTFIX}"
+    elif [[ "${IS3INSTALLED}x" = *NX\ Enterprise\ Server*x ]];
+    then
+      LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c4-)
+      OLD_LICENSE_ACRONYM="LTS${LIC_PSTFIX}"
+    elif [[ "${IS3INSTALLED}x" = *NX\ Enterprise\ Desktop*x ]];
+    then
+      LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c5-)
+      OLD_LICENSE_ACRONYM="LW${LIC_PSTFIX}"
+    elif [[ "${IS3INSTALLED}x" = *NX\ Advanced\ Server*x ]];
+    then
+      if [[ "${IS3INSTALLED}x" = *Node*x ]];
+      then
+        LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c5-)
+        OLD_LICENSE_ACRONYM="LTSN${LIC_PSTFIX}"
+      else
+        LIC_PSTFIX=$(echo "$OLD_LICENSE_ACRONYM" | cut -c4-)
+        OLD_LICENSE_ACRONYM="LES${LIC_PSTFIX}"
+      fi
+    fi
+
+    if [ "x${LIC_PSTFIX}" = "x" ];
+    then
+      ${GREPCOMMAND} "Evaluation" "${LICENSE3_TYPE}" > /dev/null && \
+      OLD_LICENSE_ACRONYM="${OLD_LICENSE_ACRONYM}E"
+    fi
+  fi
+
+  block_update=0
+
+  if [ "${is_runner}x" = "runnerx" ]
+  then
+    serverVersionFromAcronym "${OLD_LICENSE_ACRONYM}"
+
+    printMsgInstall " " 0
+    printMsgInstall "NoMachine${INSTALLED_NOMACHINE} is installed on this machine" 0
+    printMsgInstall " " 0
+    printMsgInstall "Two different NoMachine packages can't be installed at the same time on the same host." 0
+    printMsgInstall "Be sure you uninstall NoMachine${INSTALLED_NOMACHINE} before installing a different NoMachine product." 0
+    printMsgInstall " " 0
+
+    exit 1
+  fi
+
+  compareLicenseAcronyms "${NEW_LICENSE_ACRONYM}" "${OLD_LICENSE_ACRONYM}"
+
+  licVerFile=""
+
+  if [ -r "$NX_ROOT/etc/server.lic" ];
+  then
+    licVerFile="$NX_ROOT/etc/server.lic"
+  elif [ -r "$NX_ROOT/etc/node.lic" ];
+  then
+    licVerFile="$NX_ROOT/etc/node.lic"
+  fi
+
+  licBelow6="0"
+
+  if [ "x$licVerFile" != "x" ];
+  then
+    grep_out="$($GREPCOMMAND "Subscription Version:" $licVerFile \
+              2>/dev/null | $CATCOMMAND)"
+
+    if [ "x$grep_out" = "x" ];
+    then
+      licBelow6="1"
+    fi
+  fi
+
+  installedMainVer="0"
+
+  if [ -r "$NX_ROOT/etc/version" ];
+  then
+    installedMainVer="$($CATCOMMAND $NX_ROOT/etc/version | \
+                        $CUTCOMMAND -d '.' -f1)"
+  fi
+
+  letCrossUpdate="0"
+
+  if  [ "x$NEW_LICENSE_ACRONYM" = "xLETSE" ];
+  then
+    package_name="nomachine-enterprise-terminal-server"
+  elif [ "x$NEW_LICENSE_ACRONYM" = "xLCSE" ];
+  then
+    package_name="nomachine-cloud-server"
+  elif [ "x$NEW_LICENSE_ACRONYM" = "xLTSNE" ];
+  then
+    package_name="nomachine-terminal-server-node"
+  elif [ "x$NEW_LICENSE_ACRONYM" = "xLWE" ];
+  then
+    package_name="nomachine-workstation"
+  elif [ "x$NEW_LICENSE_ACRONYM" = "xLTSE" ];
+  then
+    package_name="nomachine-terminal-server"
+  fi
+
+  packageManagmentInstalled="0"
+  samePackageType="0"
+  pkgMgmOut=""
+
+  if [ "x$licBelow6" = "x1" ] && [ "$installedMainVer" -ge 6 ];
+  then
+
+    packageDatabaseOut=""
+    
+    checkRPM="1"
+
+    getToolPath dpkg
+
+    if [ "x${ret_getToolPath}" != "x" ];
+    then
+
+      DPKGCOMMAND="${ret_getToolPath}"
+
+      printMsg "Found dpkg path: $DPKGCOMMAND" "cmd"
+
+      runCommand "PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin '$DPKGCOMMAND' --get-selections | '$GREPCOMMAND' nomachine 2>/dev/null | '$CATCOMMAND'" "Cannot query deb packages" "cmd"
+
+      if [ "x${outCommand}" != "x" ];
+      then
+
+        checkRPM="0"
+
+        packageManagmentInstalled="1"
+
+	 runCommand "PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin '$DPKGCOMMAND' --get-selections | '$GREPCOMMAND' -v '$package_name' | '$GREPCOMMAND' nomachine 2>/dev/null | '$CATCOMMAND'" "Cannot query deb packages" "cmd"
+
+        if [ "x$package_name" = "xnomachine-terminal-server" ];
+	 then
+          runCommand "PATH=$PATH:/usr/local/sbin:/usr/sbin:/sbin '$DPKGCOMMAND' --get-selections | '$GREPCOMMAND' nomachine-terminal-server-node 2>/dev/null | '$CATCOMMAND'" "Cannot query deb packages" "cmd"
+	 fi
+
+	if [ "x${outCommand}" = "x" ];
+	then
+
+          samePackageType="1"
+
+        else
+
+          pkgMgmOut="$outCommand"
+
+        fi
+      fi
+    fi
+
+    if [ "x${checkRPM}" = "x1" ];
+    then
+
+      getToolPath rpm
+
+      if [ "x${ret_getToolPath}" != "x" ];
+      then
+
+        printMsg "Found rpm path: ${RPMCOMMAND}" "cmd"
+
+        RPMCOMMAND="${ret_getToolPath}"
+
+        runCommand "'${RPMCOMMAND}' -qa | '${GREPCOMMAND}' nomachine 2>/dev/null | '$CATCOMMAND'" "Cannot query rpm packages" "cmd"
+
+        if [ "x${outCommand}" != "x" ];
+        then
+
+          pkgMgmOut="$outCommand"
+
+          packageManagmentInstalled="1"
+	    
+          runCommand "'${RPMCOMMAND}' -qa | '$GREPCOMMAND' -v '$package_name' | '${GREPCOMMAND}' nomachine 2>/dev/null | '$CATCOMMAND'" "Cannot query rpm packages" "cmd"
+
+          if [ "x$package_name" = "xnomachine-terminal-server" ];
+          then
+            runCommand "'${RPMCOMMAND}' -qa | '$GREPCOMMAND' nomachine-terminal-server-node 2>/dev/null | '$CATCOMMAND'" "Cannot query deb packages" "cmd"
+          fi
+
+          if [ "x${outCommand}" = "x" ];
+          then
+
+            samePackageType="1"
+
+          else
+
+            pkgMgmOut="$outCommand"
+
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  mgmPkgName=""
+  
+  if [ ${ret_compareLicenseAcronyms} -eq 0 ] && ([ "x$NEW_LICENSE_ACRONYM" = "xLCSE" ] ||  [ "x$NEW_LICENSE_ACRONYM" = "xLTSE" ] || \
+     [ "x$NEW_LICENSE_ACRONYM" = "xLWE" ] || [ "x$NEW_LICENSE_ACRONYM" = "xLESE" ]) && [ "x$packageManagmentInstalled" = "x1" ] && \
+     [ "x$samePackageType" = "x0" ] && [ "x$licBelow6" = "x1" ] && \
+     [ "$installedMainVer" -ge 6 ];
+  then
+    block_update=1
+
+    if [[ "x$pkgMgmOut" = *"nomachine-enterprise-terminal-server"* ]];
+    then
+      mgmPkgName=" Enterprise Terminal Server"
+    elif [[ "x$pkgMgmOut" = *"nomachine-cloud-server"* ]];
+    then
+      mgmPkgName=" Cloud Server"
+    elif [[ "x$pkgMgmOut" = *"nomachine-terminal-server-node"* ]];
+    then
+      mgmPkgName=" Terminal Server Node"
+    fi
+  fi
+  
+  if [ "x$installedMainVer" = "x5" ] || \
+       ([ "x$licBelow6" = "x1" ] && [ "$installedMainVer" -ge 6 ] && \
+          [ "x$samePackageType" = "x1" ]);
+  then
+    letCrossUpdate="1"
+  fi
+
+  #
+  # Check not-supported-anymore products or products that have 
+  # multi-product update possibility.
+  #
+
+  if [ ${ret_compareLicenseAcronyms} -eq 1 ];
+  then
+
+    block_update=1
+
+    #
+    # Enable updating Portal Server by Cloud Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "PS"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ]
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Cloud Server by Enterprise Terminal Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "ETS" "CS"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "x$installedMainVer" = "x5" ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Enterprise Server by Enterprise Terminal Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "ETS" "ES"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "x$letCrossUpdate" = "x1" ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Enterprise Server by Cloud Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "CS" "ES"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "x$installedMainVer" = "x5" ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Workstation by Terminal Server Node.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "TSN" "W"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "x$installedMainVer" = "x5" ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Terminal Server by Terminal Server Node.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "TSN" "TS"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "x$installedMainVer" = "x5" ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Small Business by Small Business Terminal Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "SBTS" "SB"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Cloud Server by Enterprise Cloud Server.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "ECS" "CS"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "$installedMainVer" -le  8 ];
+    then
+      block_update=0
+    fi
+
+    #
+    # Enable updating Cloud Server by Enterprise Cloud Server Cluster.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "ECSC" "CS"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ] && [ "$installedMainVer" -le  8 ];
+    then
+      block_update=0
+    fi
+
+
+    #
+    # Enable updating Terminal Server Node by Enterprise Terminal Server Node.
+    #
+
+    checkCustomAcronym "${OLD_LICENSE_ACRONYM}" "ETSN" "TSN"
+
+    if [ ${ret_checkCustomAcronym} -eq 0 ];
+    then
+      block_update=0
+    fi
+
+    if [[ "x$NEW_LICENSE_ACRONYM" = *"CS"* ]] && [[ "x$OLD_LICENSE_ACRONYM" = *"CS"* ]];
+    then
+      block_update=0
+    fi
+  fi
+
+  if [ ${block_update} -eq 1 ]
+  then
+
+    if [ "x$mgmPkgName" = "x" ];
+    then 
+      serverVersionFromAcronym "${OLD_LICENSE_ACRONYM}"
+      INSTALLED_NOMACHINE="${NOMACHINE_EXTENSION}"
+    else
+      INSTALLED_NOMACHINE="$mgmPkgName"
+    fi
+    
+    serverVersionFromAcronym "${NEW_LICENSE_ACRONYM}"
+
+    printMsgInstall " " 0
+    printMsgInstall "NoMachine${INSTALLED_NOMACHINE} is installed on this machine" 0
+    printMsgInstall " " 0
+    printMsgInstall "Two different NoMachine packages can't be installed at the same time on the same host." 0
+    printMsgInstall "Be sure you uninstall NoMachine${INSTALLED_NOMACHINE} before installing a different NoMachine product." 0
+    printMsgInstall " " 0
+
+    exit 1
+  fi
+}
+
+clusterStatus()
+{
+  ret_clusterStatus="0"
+
+  clusterlist_output="$(${NXSHELL} --clusterlist | ${GREPCOMMAND} -o "[[:alnum:]]\.[[:alnum:]]*\.[[:alnum:]]*\." || true)"
+
+  if [ "x${clusterlist_output}" != "x" ]
+  then
+    ret_clusterStatus="1"
+  fi
+}
+
+showClusterLicenseInformation()
+{
+  if [[ "x${OLD_LICENSE_ACRONYM}" = "xLCS"* ]] || [[ "x${OLD_LICENSE_ACRONYM}" = "xLETS"* ]]
+  then
+    LANG=$(locale | ${GREPCOMMAND} "LANG=" | ${CUTCOMMAND} -d "=" -f 2-)
+
+    if [[ "x${LANG}" != "xes"* ]] && [[ "x${LANG}" != "xde"* ]] && [[ "x${LANG}" != "xfr"* ]] &&\
+       [[ "x${LANG}" != "xit"* ]] && [[ "x${LANG}" != "xpl"* ]] && [[ "x${LANG}" != "xpt"* ]] &&\
+       [[ "x${LANG}" != "xru"* ]] && [[ "x${LANG}" != "xen"* ]]
+    then
+      LANG="en"
+    fi
+
+    serverVersionFromAcronym "${NEW_LICENSE_ACRONYM}"
+
+    message_en="Upgrading to NoMachine${NOMACHINE_EXTENSION} will preserve all failover and high-availability functionalities already configured in the previous version. However, a new product tailored specifically for cluster is available at a more convenient price. Please contact the Sales Team to find out how to switch to${NOMACHINE_EXTENSION} Cluster."
+    message_es="La actualización a NoMachine${NOMACHINE_EXTENSION} conservará todas las funcionalidades de conmutación por error y de alta disponibilidad ya configuradas en la versión anterior. Sin embargo, existe un nuevo producto adaptado específicamente para clúster a un precio más conveniente. Póngase en contacto con el equipo de ventas para saber cómo cambiar a${NOMACHINE_EXTENSION} Cluster."
+    message_de="Beim Upgrade auf NoMachine${NOMACHINE_EXTENSION} bleiben alle Ausfallsicherungs- und Hochverfügbarkeitsfunktionen erhalten, die bereits in der Vorgängerversion konfiguriert waren. Ein neues Produkt, das speziell auf Cluster zugeschnitten ist, ist jedoch auch zu einem günstigeren Preis erhältlich. Bitte wenden Sie sich an unser Vertriebsteam, um zu erfahren, wie Sie zu${NOMACHINE_EXTENSION} Cluster wechseln können."
+    message_fr="Avec une mise à niveau vers NoMachine${NOMACHINE_EXTENSION}, toutes les capacités de protection contre les pannes et de grande disponibilité déjà configurées dans la version précédente sont conservées. Toutefois, un nouveau produit conçu spécialement pour le cluster est disponible à un prix plus avantageux. Veuillez contacter l’Équipe de Vente pour découvrir comment passer à${NOMACHINE_EXTENSION} Cluster."
+    message_it="L'aggiornamento a NoMachine${NOMACHINE_EXTENSION} manterrà tutte le funzionalità di failover e alta disponibilità già configurate nella versione precedente. Tuttavia, un nuovo prodotto su misura per il cluster è disponibile a un prezzo più vantaggioso. Contatta il nostro Team di Vendita per sapere come passare a${NOMACHINE_EXTENSION} Cluster."
+    message_pl="Aktualizacja do serwera NoMachine${NOMACHINE_EXTENSION} zachowuje wszystkie funkcje przełączania awaryjnego i wysokiej dostępności, które zostały już skonfigurowane w poprzedniej wersji. W korzystniejszej cenie dostępny jest także nowy produkt dostosowany specjalnie dla rozwiązań klastrowych. Prosimy o kontakt z zespołem sprzedaży, aby uzyskać informacje o przejściu na${NOMACHINE_EXTENSION} Cluster."
+    message_pt="A atualização para o NoMachine${NOMACHINE_EXTENSION} preserva todas as funcionalidades de failover e de elevada disponibilidade já configuradas na versão anterior. Porém, está disponível um novo produto adaptado especificamente a clusters e por um preço mais acessível. Contacte a Equipa de Vendas para saber como pode mudar para o${NOMACHINE_EXTENSION} Cluster."
+    message_ru="При переходе на NoMachine${NOMACHINE_EXTENSION} будут полностью сохранены параметры высокой доступности и автоматического переключения при отказе, уже настроенные в предыдущей версии. Однако новый продукт, разработанный специально для кластеров, доступен по более выгодной цене. Обратитесь в отдел продаж, чтобы узнать, как перейти на${NOMACHINE_EXTENSION} Cluster."
+
+    MESSAGE=""
+
+    if [[ "x${LANG}" = "xes"* ]]
+    then
+      MESSAGE="${message_es}"
+    elif [[ "x${LANG}" = "xde"* ]]
+    then
+      MESSAGE="${message_de}"
+    elif [[ "x${LANG}" = "xfr"* ]]
+    then
+      MESSAGE="${message_fr}"
+    elif [[ "x${LANG}" = "xit"* ]]
+    then
+      MESSAGE="${message_it}"
+    elif [[ "x${LANG}" = "xpl"* ]]
+    then
+      MESSAGE="${message_pl}"
+    elif [[ "x${LANG}" = "xpt"* ]]
+    then
+      MESSAGE="${message_pt}"
+    elif [[ "x${LANG}" = "xru"* ]]
+    then
+      MESSAGE="${message_ru}"
+    else
+      MESSAGE="${message_en}"
+    fi
+
+    clusterStatus
+
+    if [ -f "${NX_ROOT}/etc/version" ]
+    then
+      version=$("${CATCOMMAND}" "${NX_ROOT}/etc/version")
+    fi
+
+    if [ "x${ret_clusterStatus}" = "x1" ] && ([[ "${version}" = "7."* ]] || [[ "${version}" = "6."* ]])
+    then
+      printMsgInstall " " 0
+      printMsgInstall "${MESSAGE}" 0
+      printMsgInstall " " 0
+    fi
+  fi
+}
+
+#######################
+####### END OF LICENSES
+#######################
+
+blockAloneUpdatePackageInstallation ()
+{
+  lastChar=$(${ECHOCOMMAND} -n "${NEW_LICENSE_ACRONYM}" | ${TAILCOMMAND} -c1)
+
+  if [ "x${lastChar}" = "xU" ] && 
+     [ ! -f "${NX_ROOT}/bin/nxserver.bin" ];
+  then
+    printMsgInstall "You cannot use a package for update to perform a new fresh installation." 0
+
+    exit 1
+  fi
+}
+
+backupNodesDatabaseForServer3Upgrade ()
+{
+  #
+  # Upgrade procedure from NX Advanced Server
+  # will remove nodes.db. We have to preserved
+  # original file.
+  #
+
+  getLicenseAcronym "${NX_ROOT}/etc/server.lic"
+  base_lic_acronym="${ret_getLicenseAcronym}"
+
+  if [ "x${base_lic_acronym}" = "xLASS" ];
+  then
+    commandBackupFile "${NX_ROOT}/etc/nodes.db" "backup" "warn"
+  fi
+}
+
+backupVersionFile ()
+{
+  if [ -f "${NX_ROOT}/etc/version" ];
+  then
+    commandBackupFile "${NX_ROOT}/etc/version" "backup" "warn"
+  fi
+}
+
+addUpdateDBFile ()
+{
+  local serverInstalled="$1"
+
+  if [ "$system" = "macosx" ]; then
+    var_db="/Library/Application Support/NoMachine/var/db/"
+  else
+    var_db="${NX_ROOT}/var/db/"
+  fi
+
+  if [ ! -d "${var_db}" ]; then
+    runCommand "${MKDIRCOMMAND} -p '${var_db}'" "Cannot create directory: '${var_db}'" "error"
+  fi
+
+  if [ ! -f "${var_db}/update" ]; then
+    runCommand "${TOUCHCOMMAND} '${var_db}/update'" "Cannot create ${var_db}/update file" "error" 
+  fi
+
+  if [ "x$serverInstalled" = "x1" ];
+  then
+    commandChownChmod "${USER_NX}:${USER_NX}" "0644" "${var_db}/update" "warn"
+  else
+    commandChownChmod "root:${ROOTGNAME}" "0644" "${var_db}/update" "warn"
+  fi
+}
+
+logBasicSystemInfo ()
+{
+  #
+  # Writing basic data about package file
+  # and platform.
+  #
+
+  getSystemName
+
+  if [ "${system}x" = "macosxx" ]
+  then
+
+    if [[ "${PACKAGE_FILE}x" != "#MACOS_PACKAGE_FILE_NAME#x" ]]
+    then    
+      printMsg "Installing NoMachine from: ${PACKAGE_FILE} package" "onlylog"
+    else    
+      printMsg "Data about package are not available" "warn"
+    fi
+
+    getMacOSXVersion
+
+    uname_output=$(${UNAMECOMMAND} -a)
+
+    if [ "${uname_output}x" != "x" ]
+    then    
+      printMsg "System information: ${system} ${mac_ver_full} ${uname_output}" "onlylog"
+    else    
+      printMsg "System information are not available" "error" 
+    fi
+  else
+    if [ "${PACKAGE_FILE}x" != "x" ]
+    then    
+      printMsg "Installing NoMachine from: ${PACKAGE_FILE} package" "onlylog"
+    else    
+      printMsg "Data about package are not available" "warn"
+    fi
+
+    getLinuxName
+    getDistroVersion
+
+    uname_output=$(${UNAMECOMMAND} -a)
+
+    if [ "${uname_output}x" != "x" ]
+    then    
+      printMsg "System information: ${system} ${ret_DistroVersion} ${uname_output}" "onlylog"
+    else    
+      printMsg "System information are not available" "error" 
+    fi
+  fi
+}
+
+compareMD5 ()
+{
+  file_1="${1}"
+  file_2="${2}"
+
+  file_md5_1="0"
+  file_md5_2="0"
+
+  ret_compareMD5=0
+
+  if [ -f "${file_1}" ]
+  then
+    file_md5_1=($("${MD5SUMCOMMAND}" "${file_1}"))
+  fi
+
+  if [ -f "${file_2}" ]
+  then
+    file_md5_2=($("${MD5SUMCOMMAND}" "${file_2}"))
+  fi
+
+  if [ "${file_md5_1}" = "${file_md5_2}" ]
+  then
+    ret_compareMD5=1
+  fi
+}
+
+getProcessPID ()
+{
+  tab_PID=$(${PSCOMMAND} ax -o "pid,command" 2>/dev/null | ${GREPCOMMAND} "$1" | ${GREPCOMMAND} -v uninstall | ${GREPCOMMAND} -v grep | ${AWKCOMMAND} '{print $1;}' 2>/dev/null)
+}
+
+killNXApp ()
+{
+  nxapp="$1"
+
+  if [ "x${nxapp}" = "x" ];
+  then
+    return
+  fi
+  
+  if [ "${NX_ROOT: -1}" = "/" ]
+  then
+    getProcessPID "${NX_ROOT}bin/${nxapp}"
+  else
+    getProcessPID "${NX_ROOT}/bin/${nxapp}"
+  fi
+
+  for i in ${tab_PID}; do
+    printMsg "Killing process: ${nxapp} ($i)" "cmd"
+    commandKill "$i"
+  done
+
+  if [ "x${system}" = "xmacosx" ];
+  then
+
+    getProcessPID "MacOS/${nxapp}"
+
+    for i in ${tab_PID};
+    do
+      printMsg "Killing process: ${nxapp} ($i)" "cmd"
+      commandKill "$i"
+    done
+  fi
+}
+
+#
+# compareVersions version1 version2
+#
+# Function returns:
+# 0 : versions are equal
+# 1 : version1 is greater
+# 2 : version2 is greater
+#
+
+compareVersions ()
+{
+  local i
+  ret_compareVersions=0
+
+  if [ "x$1" = "x$2" ];
+  then
+    return 0
+  fi
+
+  local IFS=.
+
+  local ver1=($1)
+  local ver2=($2)
+
+  #
+  # fill empty fields in ver1 with zeros.
+  #
+
+  for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
+  do
+    ver1[i]=0
+  done
+
+  for ((i=0; i<${#ver1[@]}; i++))
+  do
+    if [ -z ${ver2[i]} ]
+    then
+      # fill empty fields in ver2 with zeros
+      ver2[i]=0
+    fi
+    if [ ${ver1[i]} -gt ${ver2[i]} ]
+    then
+      ret_compareVersions=1
+      return 0
+    fi
+    if [ ${ver1[i]} -lt ${ver2[i]} ]
+    then
+      ret_compareVersions=2
+      return 0
+    fi
+  done
+  return 0
+}
+
+VERSION="8.16.1"
+PACKAGE_FILE="nomachine_8.16.1_1_aarch64.tar.gz"
+NX_ERROR_ETC_CFG_NOT_FOUND=101
+NX_ERROR_ETC_CFG_VARIABLE_NOT_FOUND=102
+NX_ERROR_UNKNOWN_PACKAGE_NAME=103
+NX_ERROR_CODE=100
+
+printMsgInstall  ()
+{
+  if [ "x$1" != "x" ];
+  then
+    if [ "x$2" = "x0" ];
+    then
+      ${ECHOCOMMAND} $1
+    fi
+  fi
+}
+
+printErrorInstallationDir ()
+{
+  package="$2"
+
+  if [ "x$package" = "x" ];
+  then
+    package="package"
+  fi
+
+  ${ECHOCOMMAND} "Detected NoMachine ${package} installed in: '${1}'."
+  ${ECHOCOMMAND} "All NoMachine packages should be installed in the same directory."
+}
+
+compareVersions ()
+{
+  printMsgDebug "compareVersions: ($1,$2)"
+  ret_compareVersions=0
+
+  if [ "x$1" = "x$2" ];
+  then
+    return 0
+  fi
+
+  version1=$1
+  version2=$2
+
+  for i in 1 2 3
+  do
+    ver1=` ${ECHOCOMMAND} $version1 | ${CUTCOMMAND} -d '.' -f $i`
+    ver2=` ${ECHOCOMMAND} $version2 | ${CUTCOMMAND} -d '.' -f $i`
+
+    if [ "x$ver1" != "x" ] && [ "x$ver2" != "x" ];
+    then
+      if [ $ver1 -gt $ver2 ];
+      then
+        ret_compareVersions=1
+        return 0
+      elif [ $ver1 -lt $ver2 ];
+      then
+        ret_compareVersions=2
+        return 0
+      fi
+    fi
+  done
+
+return 0
+
+}
+
+setVariableNames()
+{
+  printMsgDebug "setVariableNames: ($1)"
+  ret_setVariableNames=0
+  package=$1
+  case $package in
+    "runner")
+      upperPackageName="Runner"
+      configRootName=$CFG_RUNNER_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+  
+      basePackageName=""
+      ;;
+    "player")
+      upperPackageName="Player"
+      configRootName=$CFG_PLAYER_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName="runner"
+      ;;
+    "node")
+      upperPackageName="Node"
+      configRootName=$CFG_NODE_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "server")
+      upperPackageName="Server"
+      configRootName=$CFG_SERVER_ROOT
+  
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "webplayer")
+      upperPackageName="WebPlayer"
+      configRootName=$CFG_WEBPLAYER_ROOT
+
+      depPackageName="server"
+      depUpperPackageName="Server"
+      depConfigRootName=$CFG_SERVER_ROOT
+
+      basePackageName="runner"
+      ;;
+    "manager")
+      upperPackageName="manager"
+      configRootName=$CFG_MANAGER_ROOT
+
+      depPackageName="server"
+      depUpperPackageName="Server"
+      depConfigRootName=$CFG_SERVER_ROOT
+
+      basePackageName="runner"
+      ;;
+    "connect")
+      upperPackageName="Connect"
+      configRootName=$CFG_CONNECT_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "usb")
+      upperPackageName="Usb Redirector"
+      configRootName=$CFG_USBREDIRECTOR_ROOT
+  
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+  
+      basePackageName=""
+      ;;
+    "avc")
+      upperPackageName="Avc Connector"
+      configRootName=$CFG_RUNNER_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "network-database")
+      upperPackageName="Network Database"
+      configRootName=$CFG_NETWORK_DATABASE_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "network-gateway")
+      upperPackageName="Network Gateway"
+      configRootName=$CFG_NETWORK_GATEWAY_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "network-messaging")
+      upperPackageName="Network Messaging"
+      configRootName=$CFG_NETWORK_MESSAGING_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "network-relay")
+      upperPackageName="Network Realy"
+      configRootName=$CFG_NETWORK_RELAY_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    "network-web")
+      upperPackageName="Network Web"
+      configRootName=$CFG_NETWORK_WEB_ROOT
+
+      depPackageName=""
+      depUpperPackageName=""
+      depConfigRootName=""
+
+      basePackageName=""
+      ;;
+    *)
+      ${ECHOCOMMAND} "ERROR: Unknown package -- $package"
+      ret_setVariableNames=$NX_ERROR_UNKNOWN_PACKAGE_NAME
+      ;;
+   esac
+
+  return 0
+}
+
+getBasePackagePath()
+{
+  printMsgDebug "getBasePackagePath"
+  ret_getBasePackagePath=0
+
+  base_package_name="runner"
+  base_variable_name="RunnerRoot"
+  BASE_PACAKGE_INSTALLATION_PATH=""
+
+  getConfigFileName ${base_package_name}
+
+  getValueFromCfgFile ${base_variable_name} "${ret_getConfigFileName}"
+  if [ ${ret_getValueFromCfgFile} = 2 ];
+  then
+    BASE_PACAKGE_INSTALLATION_PATH="${cfg_val}"
+  else
+    ret_getBasePackagePath=1
+  fi
+}
+
+getInstalledProduct()
+{
+#Par1 - product name, i.e. player, connect, server
+  printMsgDebug "getInstalledProduct: ($1)"
+
+  installedProductName=""
+  if [ ${1} = "player" ];
+  then
+    isInstalledProduct "connect"
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      installedProductName="connect"
+    fi
+
+    isInstalledProduct "server"
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      installedProductName="server"
+    fi
+
+  elif [ ${1} = "server" ];
+  then
+    isInstalledProduct "player"
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      installedProductName="player"
+    fi
+
+
+  elif [ ${1} = "connect" ];
+  then
+    isInstalledProduct "player"
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      installedProductName="player"
+    fi
+  fi
+}
+
+getInstalledInfo()
+{
+
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "getInstalledInfo: ($1)"
+  ret_getInstalledInfo=0
+
+  package_name=$1
+  VERSION=""
+  NX_PATH=""
+
+  setVariableNames $package_name
+  if [ $ret_setVariableNames -gt 0 ];
+  then
+    ret_getInstalledInfo=${NX_ERROR_CODE}
+    return 0
+  fi
+
+  if [ -f "$config_file_name" ];
+  then
+
+    getConfigFileName $package_name
+    config_file_name=$ret_getConfigFileName
+
+    if [ "x$dep_config_file_name" != "x" ];
+    then
+      getValueFromCfgFile "$variableName" "$dep_config_file_name"
+      if [ $ret_getValueFromCfgFile = 2 ];
+      then
+        NX_PATH="$install_path/NX"
+        printMsgDebug "Found installed nx$package_name in ${NX_PATH base} on ${config_file_name}."
+      else
+        printMsgDebug "WARNING: Could not determine the installation path base on"
+        printMsgDebug "         the existing $dep_config_file_name config file."
+        printMsgDebug "         Trying to use default path: '${OLD_NX_LOCALIZATION}'."
+      fi
+    fi
+  fi
+
+  if [ "x$NX_PATH" != "x" ];
+  then
+    path_tmp="$NXPATH"
+  else
+    path_tmp="$OLD_NX_LOCALIZATION"
+  fi
+
+  if [ $ret_getValueFromCfgFile != 0 ] || [ ! -x "$path_tmp/bin/nx$package_name" ];
+  then
+    ret_getInstalledInfo=1
+    return 0
+  fi
+
+  getInstalledVersionFromBinaries  "$package_name" "$path_tmp"
+  if [ $ret_getInstalledVersionFromBinaries = 0 ] && [ "x$version" != "x" ];
+  then
+    VERSION="$version"
+    NX_PATH="$path_tmp"
+    printMsgDebug "IsInstalled: VERSION=$VERSION"
+    printMsgDebug "IsInstalled: NX_PATH=$NX_PATH"
+    return 0
+  fi
+
+  ret_getInstalledInfo=1
+}
+
+compareInstallPathWithConfigFile ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - procedure type, i.e. install, update
+  # Par3 - install path
+  #
+
+  printMsgDebug "compareInstallPathWithConfigFile: ($1,$2,$3)"
+  ret_compareInstallPathWithConfigFile=0
+
+  package_name=$1
+  _operation_=$2
+  install_path="$3"
+
+  if [ "x${package_name}" = "xavc" ];
+  then
+    return 0
+  fi
+
+  setVariableNames $package_name
+  if [ $ret_setVariableNames -gt 0 ];
+  then
+    exit 1
+  fi
+
+  if [ "${_operation_}" = "install" ];
+  then
+    isAlreadyInstalled $package_name
+    if [ $ret_isAlreadyInstalled = "1" ];
+    then
+      _operation_="update";
+    fi
+  fi
+
+  if [ "${_operation_}" = "install" ];
+  then
+    #when install, checking the path or previously installed package in config file
+    packageToCheckConfigFile=$depPackageName
+    variableName=$depConfigRootName
+
+  else #update
+    #when update, checking the path in config file
+    packageToCheckConfigFile=$package_name
+    variableName=$configRootName
+  fi
+
+  getConfigFileName ${package_name}
+  config_file_name="${ret_getConfigFileName}"
+
+  getConfigFileName ${packageToCheckConfigFile} ${packageToCheckConfigFile}
+  dep_config_file_name="${ret_getConfigFileName}"
+
+  printMsgDebug "packageToCheckConfigFile = $packageToCheckConfigFile"
+  printMsgDebug "variableName = $variableName"
+  printMsgDebug "config_file_name = $config_file_name"
+  printMsgDebug "dep_config_file_name = $dep_config_file_name"
+
+  if [ "${_operation_}" = "install" ];
+  then
+    printMsgDebug "Operation: Install"
+
+    if [ -f "$config_file_name" ];
+    then
+      ${ECHOCOMMAND} "Detected config file in: '$config_file_name'."
+      ${ECHOCOMMAND} "Please remove previous installation first."
+      ret_compareInstallPathWithConfigFile=1
+      return 0
+    fi
+
+    if [ "x${package_name}" != "xconnect" ] && [ "x${package_name}" != "xplayer" ] && [ "x${package_name}" != "xusb" ];
+    then
+      getInstalledVersionFromBinaries  $package_name "$OLD_NX_LOCALIZATION"
+      if [ $ret_getInstalledVersionFromBinaries = 0 ] && [ "x$version" != "x" ];
+      then
+        ${ECHOCOMMAND} "Detected NoMachine package in: '$OLD_NX_LOCALIZATION'."
+        ${ECHOCOMMAND} "Please remove previous installation first."
+        ret_compareInstallPathWithConfigFile=1
+        return 0
+      fi
+    fi
+
+    if [ "x$packageToCheckConfigFile" != "x" ];
+    then
+      getValueFromCfgFile "$variableName" "$dep_config_file_name"
+      if [ $ret_getValueFromCfgFile = 2 ];
+      then
+        if [ "$cfg_val" != "$install_path/NX" ];
+        then
+          printErrorInstallationDir "$cfg_val"
+          #${ECHOCOMMAND} "Detected NoMachine package installed in: $cfg_val."
+          #${ECHOCOMMAND} "All NoMachine packages should be installed in the same directory."
+          ret_compareInstallPathWithConfigFile=1
+          return 0
+        fi
+
+        return 0
+      else
+
+        if [ "${NX_MPKG_PACKAGE}" = "webplayer" ];
+        then
+          ${ECHOCOMMAND} "To install the Cloud Server, please be sure you have already"
+          ${ECHOCOMMAND} "installed and configured a NoMachine package to make this host"
+          ${ECHOCOMMAND} "both a player and a server."
+        else 
+          ${ECHOCOMMAND} "Failed NoMachine package dependencies."
+          ${ECHOCOMMAND} "Missing NoMachine ${depUpperPackageName}."
+        fi
+
+        ret_compareInstallPathWithConfigFile=1
+        return 0
+      fi
+    else
+      printMsgDebug "No dependecies are defined for: ${package_name}"
+      return 0
+    fi
+  else #update
+    printMsgDebug "Operation: Update"
+    printMsgDebug "OLD_VERSION=$OLD_VERSION"
+
+    if [ ! -f "$config_file_name" ];
+    then
+      if [ "x${package_name}" = "xplayer" ] || [ "x${package_name}" = "xusb" ];
+      then
+        return 0
+      fi
+
+      if [ "x$OLD_VERSION" = "x" ];
+      then
+        getInstalledVersionFromBinaries "$package_name" "$OLD_NX_LOCALIZATION"
+
+        if [ $ret_getInstalledVersionFromBinaries = 1 ];
+        then
+          ${ECHOCOMMAND} "Cannot determine the version of previously installed package."
+          ${ECHOCOMMAND} "Please, correctly uninstall broken version first."
+          ret_compareInstallPathWithConfigFile=1
+          return 0
+        fi
+      else
+        version=`${ECHOCOMMAND} $OLD_VERSION | ${CUTCOMMAND} -d '.' -f1`
+        printMsgDebug "VERSION = $version"
+      fi
+
+      if [ "x$version" != "x4" ];
+      then
+        if [ "$install_path/NX" != "$OLD_NX_LOCALIZATION" ];
+        then
+          printErrorInstallationDir "$OLD_NX_LOCALIZATION"
+          #${ECHOCOMMAND} "Detected installed NoMachine package in: '$OLD_NX_LOCALIZATION'."
+          #${ECHOCOMMAND} "All NoMachine packages should be installed in the same directory."
+          ret_compareInstallPathWithConfigFile=1
+          return 0
+        fi
+      fi
+      return 0
+    fi
+
+    if [ "x$packageToCheckConfigFile" != "x" ];
+    then
+      getValueFromCfgFile "$variableName" "$config_file_name"
+      if [ $ret_getValueFromCfgFile = 2 ];
+      then
+        if [ "$cfg_val" != "$install_path/NX" ];
+        then
+          printErrorInstallationDir "$cfg_val"
+          #${ECHOCOMMAND} "Detected installed NoMachine package in: $cfg_val."
+          #${ECHOCOMMAND} "All NoMachine packages should be installed in the same directory."
+          ret_compareInstallPathWithConfigFile=1
+          return 0
+        fi
+
+        return 0
+      else
+        ret_compareInstallPathWithConfigFile=1
+        return 0
+      fi
+
+    fi
+
+    return 0
+  fi
+
+}
+
+isAlreadyInstalled ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "isAlreadyInstalled: ($1)"
+  ret_isAlreadyInstalled=0
+
+  package_name=$1
+
+  setVariableNames "$package_name"
+  if [ $ret_setVariableNames != 0 ];
+  then
+    ret_isAlreadyInstalled=$ret_setVariableNames
+  fi
+
+  getConfigFileName "$package_name"
+  if [ -f "$ret_getConfigFileName" ];
+  then
+    ret_isAlreadyInstalled=1
+    return 0
+  fi
+
+  if [ "x$package_name" = "xconnect" ] || [ "x$package_name" = "xplayer" ] || [ "x$package_name" = "xusb" ];
+  then
+    return 0
+  fi
+
+  if [ -f "$OLD_NX_LOCALIZATION/bin/nx$package_name" ] || [ -f "$OLD_NX_LOCALIZATION/bin/nx$package_name" ];
+  then
+    ret_isAlreadyInstalled=1
+    return 0
+  fi
+
+  return 0
+}
+
+checkPathsConnectTAR()
+{
+  #
+  # Par1 - procedure idetificator type
+  #
+
+  printMsgDebug "CheckPathsConnectTAR: ($1)"
+  ret_checkPathsConnectTAR=0
+
+  action="$1"
+
+  getInstallationPath
+  printMsgDebug "Install path = $INSTALL_PATH"
+
+  getPackagePath "connect"
+
+  if [ "x${action}" = "xinstall" ];
+  then
+    printMsgDebug "Action: install"
+  elif [ "x${action}" = "xupdate" ];
+  then
+    printMsgDebug "Action: update"
+    if [ "x${ROOTDIR}" != "x${INSTALL_PATH}/NX" ];
+    then
+      ${ECHOCOMMAND} "Detected NoMachine $upperPackageName installed in: '${ROOTDIR}'."
+      ${ECHOCOMMAND} "All NoMachine packages should be installed in the same directory."
+      ret_checkPathsConnectTAR=1
+      return 0
+    fi
+  else
+    printMsgDebug "Action: unknown"
+    ${ECHOCOMMAND} "ERROR: Unknown action: '${action}'"
+    ret_checkPathsConnectTAR=1
+    return 0
+  fi
+
+  return 0
+}
+
+
+checkPathsRPM()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - procedure idetificator type
+  #
+
+  printMsgDebug "CheckPathsRPM: ($1,$2)"
+  ret_checkPathsRPM=0
+
+  getInstallationPath
+  printMsgDebug "install path = $INSTALL_PATH"
+  if [ "$2" = "install" ] || [ "$2" = "1" ];
+  then
+    _operation_="install"
+  else
+    _operation_="update"
+  fi
+
+  if [ "x$1" = "xconnect" ];
+  then
+    checkPathsConnectTAR "${_operation_}"
+    ret_checkPathsRPM=$ret_checkPathsConnectTAR
+  fi
+
+  compareInstallPathWithConfigFile $1 ${_operation_} "$INSTALL_PATH"
+  ret_checkPathsRPM=$ret_compareInstallPathWithConfigFile
+}
+
+checkPathsDEB()
+{
+printMsgDebug "CheckPathsDEB: ($1,$2)"
+
+  ret_checkPathsDEB=0
+
+  _operation_=$2
+  if [ ${_operation_} = "upgrade" ];
+  then
+    _operation_="update"
+  fi
+
+  if [ "x$1" = "xconnect" ];
+  then
+    checkPathsConnectTAR "${_operation_}"
+    ret_checkPathsDEB=$ret_checkPathsConnectTAR
+    return 0 
+  fi
+
+  if [ ${_operation_} = "install" ];
+  then
+    getBasePackagePath
+
+    printMsgDebug "getBasePackagePath=$BASE_PACAKGE_INSTALLATION_PATH"
+    if [ $ret_getBasePackagePath = $NX_ERROR_ETC_CFG_NOT_FOUND ];
+    then
+      printMsgDebug "WARNING: Config file of base package not found."
+      return 0
+    fi
+  fi
+
+  getInstallationPath
+  printMsgDebug "Install path = $INSTALL_PATH"
+
+  compareInstallPathWithConfigFile $1 ${_operation_} "${INSTALL_PATH}"
+  ret_checkPathsDEB=$ret_compareInstallPathWithConfigFile
+  return 0 
+}
+
+checkPathsSPARC()
+{
+printMsgDebug "CheckPathsSPARC: ($1)"
+  ret_checkPathsSPARC=0
+
+  DEFAULT_PREFIX="/opt"
+  NX_INSTALL_PREFIX="$PKG_INSTALL_ROOT"
+
+  getInstallationPath
+  printMsgDebug "Install path = $INSTALL_PATH"
+
+  _operation_="install"
+  compareInstallPathWithConfigFile $1 ${_operation_} "$INSTALL_PATH"
+  ret_checkPathsSPARC=$ret_compareInstallPathWithConfigFile
+}
+
+checkPathsTAR()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - procedure idetificator type
+  #
+
+  printMsgDebug "CheckPathsTAR: ($1,$2)"
+  ret_checkPathsTAR=0
+
+  if [ "x$package_name" = "xconnect" ];
+  then
+    checkPathsConnectTAR "$2"
+    ret_checkPathsTAR=$ret_checkPathsConnectTAR
+    return 0
+  fi
+
+  getInstallationPath
+  printMsgDebug "Install path = $INSTALL_PATH"
+
+  action=$2
+
+  compareInstallPathWithConfigFile "$1" "$action" "$INSTALL_PATH" "1"
+  ret_checkPathsTAR=$ret_compareInstallPathWithConfigFile
+}
+
+checkPaths()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - package type, i.e. "rpm", "deb" or "sparc"
+  # Par3 - procedure idetificator type, i.e. for RPMs 1=install, other=update
+  #
+
+  printMsgDebug "CheckPaths: ($1,$2,$3)"
+  ret_checkPaths=0
+
+  case $2 in
+    "rpm")
+	checkPathsRPM $1 $3
+	ret_checkPaths=$ret_checkPathsRPM
+	return 0
+	;;
+    "deb")
+	checkPathsDEB $1 $3
+	ret_checkPaths=$ret_checkPathsDEB
+	return 0
+	;;
+    "sparc")
+	checkPathsSPARC $1
+	ret_checkPaths=$ret_checkPathsSPARC
+	return 0
+	;;
+    "tar")
+	checkPathsTAR $1 $3
+	ret_checkPaths=$ret_checkPathsTAR
+	return 0
+	;;
+    *)
+	${ECHOCOMMAND} "ERROR: Unknown package type. Supported packages: rpm, deb, sparc, tar."
+	ret_checkPaths=1
+	return 0
+	;;
+  esac
+
+}
+
+isDirtyEtc ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "isDirtyEtc: ($1)"
+  package_name="$1"
+  ret_isDirtyEtc=0 
+
+  getPackagePath "${package_name}" 
+  if [ ${ret_getPackagePath} = 1 ];
+  then
+    return 0
+  fi
+ 
+  if [ ${ret_getPackagePath} = 0 ] && [ ! -d "${ret_packagePath}" ];
+  then
+    printMsgDebug "Package: ${package_name}: Installtion folder ${ret_packagePath} doesn't exist"
+
+    #
+    # folder doesn't exist while etc files are present --> dirty folder
+    #
+
+    ret_isDirtyEtc=1
+    return 0
+  fi
+
+  binary_file="nx${package_name}"
+  if [ "x${package_name}" = "xconnect" ];
+  then
+    binary_file="nxserver" 
+  fi
+  if [ ! -f "${ret_packagePath}/bin/${binary_file}" ];
+  then
+    #binary file doesn't exist while etc files are present --> dirty folder
+    printMsgDebug "Package: ${package_name}: Binary file "${ret_packagePath}/bin/${binary_file}" doesn't exist"
+    ret_isDirtyEtc=1
+    return 0
+  fi
+}
+
+checkEtcFolder()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "checkEtcFolder: ($1)"
+  package_name_etc="$1"
+  ret_checkEtcFolder=0
+
+  if [ "x${package_name_etc}" != "xplayer" ] && [ "x${package_name_etc}" != "xnode" ] && 
+     [ "x${package_name_etc}" != "xserver" ] && [ "x${package_name_etc}" != "xwebplayer" ] &&
+     [ "x${package_name_etc}" != "xusb" ]  && [ "x${package_name_etc}" != "xavc" ];
+  then
+    ${ECHOCOMMAND} "ERROR: Unknown package name: ${package_name}."
+    return 1
+  fi
+
+  if [ "x${package_name_etc}" = "xavc" ];
+  then
+
+    #
+    # Avc package don't use /etc/NX
+    #
+
+    return 0
+  fi
+
+  isDirtyEtc "player"
+
+  if [ ${ret_isDirtyEtc} = 1 ];
+  then
+    ret_checkEtcFolder=1
+    return 0
+  fi
+
+  isDirtyEtc "node"
+  if [ ${ret_isDirtyEtc} = 1 ];
+  then
+    ret_checkEtcFolder=1
+    return 0
+  fi
+
+  isDirtyEtc "server"
+  if [ ${ret_isDirtyEtc} = 1 ];
+  then
+    ret_checkEtcFolder=1
+    return 0
+  fi
+
+  isDirtyEtc "connect"
+  if [ ${ret_isDirtyEtc} = 1 ];
+  then
+    ret_checkEtcFolder=1
+    return 0
+  fi
+
+  return 0
+}
+
+isInstalled_3 ()
+{
+  printMsgDebug "isInstalled_3(${1})"
+  ret_isInstalled_3=0
+
+  verbose="${1}"
+
+  if [ ! -d /etc/NX ] || [ ! "$(${LSCOMMAND} -1A /etc/NX)" ];
+  then
+
+    if  [ -d /usr/NX/bin ] && [ "$(${LSCOMMAND} -1A /usr/NX/bin)" ];
+    then
+      ret_isInstalled_3=0
+    fi
+
+  fi
+
+  printMsgDebugReturn "isInstalled_3" "${ret_isInstalled_3}"
+  return 0
+}
+
+setConfigFile ()
+{
+  printMsgDebug "setConfigFile: ($1,$2)"
+  packageName="${1}"
+  installPath="${2}"
+
+  getConfigFileName "${packageName}"
+
+  if [ -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg" ];
+  then
+    printMsgDebug "File: /etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg already exists"
+    return 0
+  fi
+
+  if [ -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg.sample" ];
+  then
+    $CPCOMMAND -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg.sample" "${ret_getConfigFileName}"
+  else
+    $CPCOMMAND -f "$NX_ROOT/scripts/etc/localhost/$1.cfg" "${ret_getConfigFileName}"
+  fi
+
+  commandRmIfExist "${ret_getConfigFileName}.sample"
+
+  if [ -f "${ret_getConfigFileName}" ];
+  then
+    commandChown "root:root" "${ret_getConfigFileName}" "cmd"
+  fi
+
+  getRootCfgName "${packageName}"
+  ${SEDCOMMAND} -e 's:^'${ret_CFGRootName}' = .*:'${ret_CFGRootName}' = \"'"${installPath}"'\":' "${ret_getConfigFileName}" > "${ret_getConfigFileName}.bkp"
+  ${MVCOMMAND} "${ret_getConfigFileName}.bkp" "${ret_getConfigFileName}"
+}
+
+getRunnerVersion ()
+{
+  printMsgDebug "getRunnerVersion: ()"
+  ret_getRunnerVersion=0
+
+  runnerPkgVersion=""
+
+  getConfigFileName "runner"
+  runnerConfigFile="$ret_getConfigFileName"
+
+  if [ ! -f ${runnerConfigFile} ];
+  then
+    printMsgDebug "getRunnerVersion: cannot find file: ${runnerConfigFile}"
+    ret_getRunnerVersion=1
+
+    return 0
+  fi
+
+  getValueFromCfgFile "${CFG_RUNNER_ROOT}" "${runnerConfigFile}"
+
+  if [ ${ret_getValueFromCfgFile} = 2 ];
+  then
+    libNXfile=`${LSCOMMAND} "${cfg_val}"/lib/libnx.so 2>/dev/null`
+    if [ "x${libNXfile}" = "x" ];
+    then
+      printMsgDebug "Cannot read libnx library version"
+      ret_getRunnerVersion=1
+
+      return 0
+    fi
+
+    printMsgDebug "libnx = ${libNXfile}"
+    runnerPkgVersion=`${ECHOCOMMAND} ${libNXfile} | ${SEDCOMMAND} -e 's|.*libnx\.so\.||' 2>/dev/null`
+    printMsgDebug "runnerPkgVersion = ${runnerPkgVersion}"
+
+    return 0
+  fi
+
+  ret_getRunnerVersion=1
+  return 0
+}
+
+getProductVersion ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "getProductVersion: ($1)"
+  ret_getProductVersion=0
+  productPkgVersion=""
+
+  if [ "x$1" = "xrunner" ];
+  then
+    getRunnerVersion
+    ret_getProductVersion=${ret_getRunnerVersion}
+    productPkgVersion="${runnerPkgVersion}"
+
+    return 0
+  fi
+
+  getConfigFileName "$1" "$1"
+  productConfigFile="${ret_getConfigFileName}"
+
+  if [ ! -f ${productConfigFile} ];
+  then
+    printMsgDebug "getProductVersion: cannot find file: ${productConfigFile}"
+    ret_getProductVersion=1
+    return 0
+  fi
+
+  getRootCfgName "$1"
+  getValueFromCfgFile "${ret_CFGRootName}" "${productConfigFile}"
+
+  if [ ${ret_getValueFromCfgFile} = 2 ];
+  then
+    if [ "${1}x" = "serverx" ]
+    then
+      productPkgVersion=`"${NX_ROOT}/bin/nx$1" --version --simple 2>&1 | ${GREPCOMMAND} Version | ${SEDCOMMAND} 's/.*- Version *//'`
+    else
+      productPkgVersion=`"${NX_ROOT}/bin/nx$1" --version 2>&1 | ${GREPCOMMAND} Version | ${SEDCOMMAND} 's/.*- Version *//'`
+    fi
+
+    printMsgDebug "productPkgVersion = ${productPkgVersion}"
+    return 0
+  fi
+
+  ret_getproductVersion=1
+  return 0
+}
+
+preparePackageAtPostInstall()
+{
+  #
+  # Par1 - product name, i.e. player, connect, server
+  # Par2 - package name, i.e. runner, node, server
+  # Par3 - operation
+  #
+
+  printMsgDebug "preparePackageAtPostInstall: ($1, $2, $3)"
+
+  if [ "x$DEFAULT_PREFIX" = "x" ];
+  then
+    DEFAULT_PREFIX="/usr"
+  fi
+
+  operation_nr=""
+  if [ "$3" = "update" ] || [ "$3" = "upgrade" ];
+  then
+    operation_nr="701"
+  else
+    operation_nr="700"
+  fi
+
+  getInstallationPath
+  NX_ROOT="$INSTALL_PATH/NX"
+  printMsgDebug "Installation directory: $NX_ROOT"
+
+  productName="$1"
+  packageName=$2
+
+  printVersionWarn=1
+
+  if [ "${productName}" = "server" ];
+  then
+    printVersionWarn=0
+  fi
+
+  if [ "${PACKAGE_TYPE}" = "deb" ];
+  then
+    PACKAGE_SOURCE=/usr/share/NX
+    file_archive="${PACKAGE_SOURCE}/packages/${productName}/nx${packageName}.tar"
+  else
+    PACKAGE_SOURCE=/etc/NX
+    file_archive="${PACKAGE_SOURCE}/${productName}/packages/nx${packageName}.tar"
+
+    if [ "${productName}" = "avc" ];
+    then
+
+      if [ "${PACKAGE_TYPE}" = "tar" ];
+      then
+        file_archive="${RunDir}/etc/NX/nx${packageName}.tar"
+      else
+        file_archive="/etc/NX/nx${packageName}.tar"
+      fi
+
+    fi
+
+  fi
+
+  printMsgDebug "file_archive: ${file_archive}.gz"
+
+  getConfigFileName ${packageName}
+
+  config_file="${ret_getConfigFileName}"
+
+  printMsgDebug "Checking if package ${packageName} can be installed"
+
+  if [ "x${packageName}" = "xrunner" ];
+  then
+    if [ "x${productName}" = "xplayer" ];
+    then
+
+      getProductVersion "server"
+
+      if [ "x${productPkgVersion}" = "x" ];
+      then
+        printMsgDebug "Probably nxserver is not installed, yet."
+      else
+        compareVersions "${productPkgVersion}" "${VERSION}"
+        cmpVer=$ret_compareVersions
+
+        if [ ${cmpVer} = 0 ];
+        then
+          printMsgDebug "Package ${packageName} already installed with this version (${VERSION})."
+        else
+          getProductName "server"
+          installedProductNameCammel=${ret_getProductName}
+
+          ${ECHOCOMMAND} "NX> $operation_nr WARNING: The installer detected you have ${installedProductNameCammel} ${productPkgVersion}."
+          ${ECHOCOMMAND} "NX> $operation_nr WARNING: Please be sure you update to ${installedProductNameCammel} ${VERSION}."
+        fi
+      fi
+    fi
+  fi
+
+  if [ ! -f "${file_archive}.gz" ];
+  then
+    printMsgDebug "Skipping unpacking $file_archive.gz: File doesn't exist" 
+
+    NX_SKIPPED_UNPACK=1
+
+    return 0
+  fi
+
+  if [ ! -d "${INSTALL_PATH}" ];
+  then
+    printMsgDebug "Creating directory: ${INSTALL_PATH}"
+    ${MKDIRCOMMAND} -p "${INSTALL_PATH}"
+  fi
+
+  if [ "x${packageName}" = "xrunner" ];
+  then
+    if [ -d "${TMP_FOLDER}/NX" ];
+    then
+      ${RMCOMMAND} -fr "${TMP_FOLDER}/NX"
+    fi
+  fi
+
+  printMsgDebug "NX> ${operation_nr} Unpacking nx${packageName} to: ${TMP_FOLDER}."
+  if [ ! -d "${TMP_FOLDER}" ];
+  then
+    printMsgDebug "Creating directory: ${TMP_FOLDER}"
+    ${MKDIRCOMMAND} -p "${TMP_FOLDER}"
+  fi
+
+  if [ -f "${TMP_FOLDER}/nx${packageName}.tar.gz" ];
+  then
+    $RMCOMMAND "${TMP_FOLDER}/nx${packageName}.tar.gz"
+  fi
+
+  if [ -f "${TMP_FOLDER}/nx${packageName}.tar" ];
+  then
+    $RMCOMMAND "${TMP_FOLDER}/nx${packageName}.tar"
+  fi
+
+  #commandCp "${file_archive}.gz" "${TMP_FOLDER}/"
+  commandMv "${file_archive}.gz" "${TMP_FOLDER}/"
+
+  if [ "${PACKAGE_TYPE}" = "deb" ];
+  then
+    commandRmDirIfExistEmpty "${PACKAGE_SOURCE}/packages/${productName}"
+    commandRmDirIfExistEmpty "${PACKAGE_SOURCE}/packages"
+  else
+    commandRmDirIfExistEmpty "${PACKAGE_SOURCE}/${productName}/packages"
+    commandRmDirIfExistEmpty "${PACKAGE_SOURCE}/${productName}"
+  fi
+
+  file_archive="${TMP_FOLDER}/nx${packageName}.tar"
+  ${GUNZIPCOMMAND} "${file_archive}.gz"
+  ( cd "${TMP_FOLDER}" && ${TARCOMMAND} xvf "${file_archive}" > /dev/null)
+
+  if [ -f "${file_archive}" ];
+  then
+    $RMCOMMAND -f "${file_archive}"
+  else
+    printMsgDebug "Cannot find file ${file_archive}."
+  fi
+
+  if [ "${NX_MPKG_PACKAGE}" = "avc" ];
+  then
+    return 0
+  fi
+
+  if [ ! -d /etc/NX/${NX_MPKG_PACKAGE}/localhost ];
+  then
+    ${MKDIRCOMMAND} -p /etc/NX/${NX_MPKG_PACKAGE}/localhost
+  fi
+
+  commandChown "root:root" "/etc/NX/${NX_MPKG_PACKAGE}"
+  commandChown "root:root" "/etc/NX/${NX_MPKG_PACKAGE}/localhost"
+
+  TMP_NX_ROOT="${TMP_FOLDER}/NX"
+  if [ -f "${TMP_NX_ROOT}/scripts/etc/nx${packageName}" ];
+  then
+    commandCp "${TMP_NX_ROOT}/scripts/etc/nx${packageName}" "/etc/NX/"
+  fi
+
+  if [ "x${product_name}" != "xplayer" ] && [ "x${package_name}" = "xplayer" ] && [ -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/player.cfg" ];
+  then
+    printMsgDebug "Skipping replacing player.cfg as this file was already provided by standalone package"
+  else
+    if [ -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg.sample" ];
+    then
+      ${CPCOMMAND} -f "/etc/NX/${NX_MPKG_PACKAGE}/localhost/${packageName}.cfg.sample" "${config_file}"
+      commandRmIfExist "${config_file}.sample"
+    else
+      ${CPCOMMAND} -f "${TMP_NX_ROOT}/scripts/etc/localhost/${packageName}.cfg" "${config_file}"
+    fi
+  fi
+
+  commandChownChmod "root:root" "0555" "${TMP_NX_ROOT}/scripts/setup/nx${packageName}"
+
+  if [ -f "${config_file}" ];
+  then
+    commandChown "root:root" "${config_file}"
+  fi
+
+  setVariableNames ${packageName}
+  printMsgDebug "configRootName=${configRootName}"
+  printMsgDebug "TMP_NX_ROOT=${TMP_NX_ROOT}"
+
+  ${SEDCOMMAND} -e 's:^'${configRootName}' = .*:'${configRootName}' = \"'"${NX_ROOT}"'\":' "${config_file}" > "${config_file}.bkp"
+  commandMv "${config_file}.bkp" "${config_file}" "warn"
+
+  #removing sample.personal config files
+  #$RMCOMMAND -f "${TMP_NX_ROOT}/etc/"*.cfg.sample.personal
+
+  if [ "x${productName}" = "xconnect" ] && [ "x${packageName}" = "xserver" ];
+  then
+    setConfigFile "connect" "${TMP_NX_ROOT}"
+  fi
+}
+
+unpackPackage()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - operation
+  #
+
+  printMsgDebug "unpackPackage: ($1,$2)"
+
+  if [ "x$DEFAULT_PREFIX" = "x" ];
+  then
+    DEFAULT_PREFIX="/usr"
+  fi
+
+  operation_nr="$2"
+  if [ "$2" = "update" ] || [ "$2" = "upgrade" ];
+  then
+    operation_nr="701"
+  else
+    operation_nr="700"
+  fi
+
+  getInstallationPath
+  NX_ROOT="$INSTALL_PATH/NX"
+  printMsgDebug "Installation directory: $NX_ROOT"
+
+  if [ "$1" = "webplayer" ];
+  then
+    packageName="webrunner"
+  else
+    packageName=$1
+  fi
+
+  file_archive="$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/packages/nx$packageName.tar"
+
+  printMsgDebug "file_archive: $file_archive.gz"
+
+  if [ ! -f "$file_archive.gz" ];
+  then
+    ${ECHOCOMMAND} "ERROR: Could not determine file archive in $file_archive.gz."
+    exit ${NX_ERROR_CODE}
+  fi
+
+  if [ ! -d "$INSTALL_PATH" ];
+  then
+    printMsgDebug "Creating directory"
+    commandMkDir "$INSTALL_PATH"
+  fi
+
+  printMsgDebug "NX> $operation_nr Unpacking nx$packageName to: ${TMP_FOLDER}."
+  if [ ! -d "${TMP_FOLDER}" ];
+  then
+    printMsgDebug "Creating directory: ${TMP_FOLDER}"
+    ${MKDIRCOMMAND} -p "${TMP_FOLDER}"
+  fi
+
+  if [ -f "${TMP_FOLDER}/nx$packageName.tar.gz" ];
+  then
+    commandRm "${TMP_FOLDER}/nx$packageName.tar.gz"
+  fi
+
+  if [ -f "${TMP_FOLDER}/nx$packageName.tar" ];
+  then
+    commandRm "${TMP_FOLDER}/nx$packageName.tar"
+  fi
+
+  commandCp "$file_archive.gz" "${TMP_FOLDER}/"
+
+  file_archive="${TMP_FOLDER}/nx$packageName.tar"
+  ${GUNZIPCOMMAND} "$file_archive.gz"
+  ( cd "${TMP_FOLDER}" && ${TARCOMMAND} xvf "$file_archive" > /dev/null)
+
+  if [ -f "$file_archive" ];
+  then
+    $RMCOMMAND -f "$file_archive"
+  else
+    printMsgDebug "Cannot find file $file_archive."
+  fi
+
+  if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" ];
+  then
+    commandMkDir "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost"
+  fi
+
+}
+
+setETCConfigFiles ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - personal
+  #
+
+  getConfigFileName $1
+  config_file="$ret_getConfigFileName"
+
+  if [ -f "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost/$1.cfg.sample" ];
+  then
+    $CPCOMMAND -f "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost/$1.cfg.sample" "$config_file"
+  else
+    $CPCOMMAND -f "$NX_ROOT/scripts/etc/localhost/$1.cfg" "$config_file"
+  fi
+
+  if [ "x$2" != "x1" ];
+  then
+    if [ -f "$config_file.sample" ];
+    then
+      commandChown "root:root" "$config_file.sample" "warn"
+    fi
+
+    if [ -f "$config_file" ];
+    then
+      commandChown "root:root" "$config_file" "warn"
+    fi
+  fi
+
+  setVariableNames $1
+  printMsgDebug "configRootName=$configRootName"
+  printMsgDebug "NX_ROOT=$NX_ROOT"
+
+  ${SEDCOMMAND} -e 's:^'$configRootName' = .*:'$configRootName' = \"'"$NX_ROOT"'\":' "$config_file" > "$config_file.bkp"
+  ${MVCOMMAND} "$config_file.bkp" "$config_file"
+}
+
+preparePackageAtPostInstallPersonal()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - operation
+  #
+
+  ETC_CONFIG_DIR="$HOME/.nx/config/server"
+
+  printMsgDebug "preparePackageAtPostInstallPersonal: ($1)"
+
+  if [ "x$DEFAULT_PREFIX" = "x" ];
+  then
+    DEFAULT_PREFIX="/usr"
+  fi
+
+  operation_nr="$2"
+
+  if [ "$2" = "update" ] || [ "$2" = "upgrade" ];
+  then
+    operation_nr="701"
+  else
+    operation_nr="700"
+  fi
+
+  getInstallationPath
+  NX_ROOT="$INSTALL_PATH/NX"
+
+  printMsgDebug "Installation directory: $NX_ROOT"
+
+  file_archive="$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/packages/nx$1.tar"
+
+  printMsgDebug "file_archive: $file_archive.gz"
+
+  if [ ! -f "$file_archive.gz" ];
+  then
+    ${ECHOCOMMAND} "ERROR: Could not stat file archive in $file_archive.gz."
+    exit ${NX_ERROR_CODE}
+  fi
+
+  if [ ! -d "$INSTALL_PATH" ];
+  then
+    printMsgDebug "Creating directory"
+    commandMkDir "$INSTALL_PATH" "warn"
+  fi
+
+  printMsgDebug "NX> $operation_nr Unpacking nx$1 to: ${TMP_FOLDER}."
+
+   if [ -f "$INSTALL_PATH/nx$1.tar.gz" ];
+   then
+     commandRm "$INSTALL_PATH/nx$1.tar.gz"
+   fi
+
+   if [ -f "$INSTALL_PATH/nx$1.tar" ];
+   then
+     commandRm "$INSTALL_PATH/nx$1.tar"
+   fi
+
+   commandMv "$file_archive.gz" "$INSTALL_PATH/" "warn"
+   commandRmDirIfExistEmpty "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/packages"
+   commandRmDirIfExistEmpty "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}"
+
+  file_archive="$INSTALL_PATH/nx$1.tar"
+  ${GUNZIPCOMMAND} "$file_archive.gz"
+  ( cd "$INSTALL_PATH" && ${TARCOMMAND} xvf "$file_archive" > /dev/null)
+
+  if [ -f "$file_archive" ];
+  then
+    commandRm "$file_archive" "warn"
+  else
+    printMsgDebug "Cannot find file $file_archive."
+  fi
+
+  if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" ];
+  then
+    commandMkDir "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" "warn"
+  fi
+
+  config_file="$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost/$1.cfg"
+
+  if [ -f "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost/$1.cfg.sample" ];
+  then
+    $CPCOMMAND -f "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost/$1.cfg.sample" "$config_file"
+  else
+    $CPCOMMAND -f "$NX_ROOT/scripts/etc/localhost/$1.cfg" "$config_file"
+  fi
+
+  setVariableNames $2
+  printMsgDebug "configRootName=$configRootName"
+  printMsgDebug "NX_ROOT=$NX_ROOT"
+
+  ${SEDCOMMAND} -e 's:^'$configRootName' = .*:'$configRootName' = \"'"$NX_ROOT"'\":' "$config_file" > "$config_file.bkp"
+  $MVCOMMAND "$config_file.bkp" "$config_file"
+
+  #removing sample config files
+  #(cd "${NX_ROOT}/etc" && for file in *.cfg.sample.personal; do  if [ -f "$file" ]; then $MVCOMMAND $file ${file%.personal}; fi; done)
+}
+
+getRootDir()
+{
+  CFGRootName="$1"
+  configFileName="$2"
+
+  getValueFromCfgFile "$CFGRootName" "$configFileName"
+  if [ "$ret_getValueFromCfgFile" != "2" ];
+  then
+    printMsgDebug "ERROR: Cannot read value $ret_CFGRootName from file: $ret_getConfigFileName"
+    ret_getRootDir="1"
+    return 0
+  else
+    ROOTDIR="$cfg_val"
+    ret_getRootDir="0"
+    return 0
+  fi
+}
+
+getInstallationPathFromCfg()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  #
+
+  printMsgDebug "getInstallationPathFromCfg: ($1)"
+  ret_getInstallationPathFromCfg=0
+
+  package_name=$1
+
+  setVariableNames $package_name
+  if [ $ret_setVariableNames -gt 0 ];
+  then
+    printMsgDebug "ERROR: getInstallationPathFromCfg: Unknown package name: $package_name."
+    ret_getInstallationPathFromCfg=1
+    return 0
+  fi
+
+  getConfigFileName ${package_name} ${package_name}
+  getRootCfgName ${package_name}
+
+  getRootDir "$ret_CFGRootName" "$ret_getConfigFileName"
+  ret_getInstallationPathFromCfg="$ret_getRootDir"
+}
+
+getNameOfTemporaryUpgradeFile ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - process ID (PID)
+  #
+
+  printMsgDebug "getNameOfTemporaryUpgradeFile: ($1,$2)"
+
+  tmpfolder="tmp"
+  PPID_UPGRADE_TMP_FILE="/${tmpfolder}/nx$1-$2"
+}
+
+createTemporaryUpgradeFile ()
+{
+  #
+  # Par1 - package name, i.e. runner, node, server
+  # Par2 - process ID (PID)
+  #
+
+  printMsgDebug "createTemporaryUpgradeFile: ($1,$2)"
+
+  getNameOfTemporaryUpgradeFile $1 $2
+  ${ECHOCOMMAND} $2 > "$PPID_UPGRADE_TMP_FILE"
+}
+
+restoreFilesNXHomeDir ()
+{
+  nx_home="$1"
+  nx_home_bkp="$2"
+  filename="$3"
+
+  if [ -f "${nx_home_bkp}/${filename}" ];
+  then
+    if [ -f "${nx_home}/${filename}" ];
+    then
+      $CPCOMMAND -f "${nx_home}/${filename}" "${nx_home}/${filename}.backup"
+    fi
+    $CPCOMMAND -f "${nx_home_bkp}/${filename}" "${nx_home}/${filename}"
+  fi
+}
+
+restoreNXHomeDir ()
+{
+  nx_home="$1"
+  nx_home_bkp="$2"
+
+  restoreFilesNXHomeDir "${nx_home}" "${nx_home_bkp}" ".ssh/restore.id_dsa.pub"
+  restoreFilesNXHomeDir "${nx_home}" "${nx_home_bkp}" ".bash_logout"
+  restoreFilesNXHomeDir "${nx_home}" "${nx_home_bkp}" ".bash_profile"
+  restoreFilesNXHomeDir "${nx_home}" "${nx_home_bkp}" ".bashrc"
+  restoreFilesNXHomeDir "${nx_home}" "${nx_home_bkp}" ".hushlogin"
+}
+
+#########################################################################
+prepareETCDirectoryForTAR ()
+{
+  product_name="$1"
+  package_name="$2"
+  auxTmpDir="$3"
+
+  printMsgDebug "prepareETCDirectoryForTAR: ($1,$2,$3)"
+
+  printMsgDebug "Preparing /etc/NX directory."
+
+  if [ ! -d /etc/NX ];
+  then
+    mkdir /etc/NX
+    if [ ! -d /etc/NX ];
+    then
+      exit 1
+    fi
+  fi
+
+  if [ -f "${auxTmpDir}/etc/NX/nx${package_name}" ];
+  then
+    $CPCOMMAND -f "${auxTmpDir}/etc/NX/nx${package_name}" "/etc/NX/"
+    if [ $? != 0 ];
+    then
+      ${ECHOCOMMAND} "ERROR: Cannot copy '${auxTmpDir}/etc/NX/nx${package_name}' to /etc/NX."
+      exit 1
+    fi
+    commandChown "root:root" "/etc/NX/nx${package_name}"
+  fi
+
+  if [ ! -d /etc/NX/${product_name}/localhost ];
+  then
+    commandMkDir "/etc/NX/${product_name}/localhost" "error"
+  fi
+  commandChown "root:root" "/etc/NX/${product_name}"
+  commandChown "root:root" "/etc/NX/${product_name}/localhost"
+
+  if [ "${product_name}" = "${package_name}" ];
+  then
+    if [ -f "${auxTmpDir}/etc/NX/${product_name}/localhost/${product_name}.cfg.sample" ];
+    then
+      $CPCOMMAND -f "${auxTmpDir}/etc/NX/${product_name}/localhost/${product_name}.cfg.sample" "/etc/NX/${product_name}/localhost/"
+    elif [ -f "${auxTmpDir}/etc/NX/scripts/etc/localhost/${product_name}.cfg" ];
+    then
+      $CPCOMMAND -f "${auxTmpDir}/etc/NX/scripts/etc/localhost/${product_name}.cfg" "/etc/NX/${product_name}/localhost/${product_name}.cfg.sample"
+    fi
+  fi
+
+  if [ "${PACKAGE_TYPE}" = "deb" ];
+  then
+    return 0
+  fi
+
+  if [ ! -d /etc/NX/${product_name}/packages ];
+  then
+    commandMkDir "/etc/NX/${product_name}/packages" "error"
+  fi
+  commandChown "root:root" "/etc/NX/${product_name}/packages"
+
+  if [ -f "$auxTmpDir/etc/NX/${product_name}/packages/nx${package_name}.tar.gz" ];
+  then
+    ${CPCOMMAND} -f "$auxTmpDir/etc/NX/${product_name}/packages/nx${package_name}.tar.gz" "/etc/NX/${product_name}/packages/"
+  fi
+}
+
+prepareETCDirectoryForTARPersonal ()
+{
+  package_name="$1"
+  auxTmpDir="$2"
+
+  printMsgDebug "prepareETCDirectoryForTARPersonal: ($1,$2)"
+
+  ETC_CONFIG_DIR="$HOME/.nx/config/server"
+  printMsgDebug "Preparing $ETC_CONFIG_DIR directory."
+
+  if [ ! -d "$ETC_CONFIG_DIR" ];
+  then
+    commandMkDir "$ETC_CONFIG_DIR" "warn"
+    if [ ! -d "$ETC_CONFIG_DIR" ];
+    then
+      exit 1
+    fi
+  fi
+
+
+  if [ $package_name = "node" ] || [ $package_name = "server" ];
+  then
+    if [ -f "$auxTmpDir/etc/NX/nx$package_name" ];
+    then
+      $CPCOMMAND -r "$auxTmpDir/etc/NX/nx$package_name" "$ETC_CONFIG_DIR"/
+      if [ $? != 0 ];
+      then
+        ${ECHOCOMMAND} "ERROR: Cannot copy '$auxTmpDir/etc/NX/$package_name' to '$ETC_CONFIG_DIR'."
+        exit 1
+      fi
+    fi
+  fi
+
+  if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" ];
+  then
+    commandMkDir "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" "warn"
+    if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/localhost" ];
+    then
+      exit 1
+    fi
+  fi
+
+  if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/${NX_MPKG_PACKAGE}/packages" ];
+  then
+    commandMkDir "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/${NX_MPKG_PACKAGE}/packages" "warn"
+    if [ ! -d "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}/${NX_MPKG_PACKAGE}/packages" ];
+    then
+      exit 1
+    fi
+  fi
+
+  if [ -d "$auxTmpDir/etc/NX/localhost" ];
+  then
+    $CPCOMMAND -r "$auxTmpDir/etc/NX/localhost" "$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}"/
+    if [ $? != 0 ];
+    then
+      ${ECHOCOMMAND} "ERROR: Cannot copy directory '$auxTmpDir/etc/NX/localhost' to '$ETC_CONFIG_DIR/${NX_MPKG_PACKAGE}'."
+      exit 1
+    fi
+  fi
+
+  if [ -d "$auxTmpDir/etc/NX/${NX_MPKG_PACKAGE}/packages" ];
+  then
+    $CPCOMMAND -r "$auxTmpDir/etc/NX/${NX_MPKG_PACKAGE}/packages" "$ETC_CONFIG_DIR"/
+    if [ $? != 0 ];
+    then
+      ${ECHOCOMMAND} "ERROR: Cannot copy directory '$auxTmpDir/etc/NX/${NX_MPKG_PACKAGE}/packages' to '$ETC_CONFIG_DIR'."
+      exit 1
+    fi
+  fi
+}
+
+removeTempDirectoryRunner ()
+{
+  printMsgDebug "removeTempDirectoryRunner: ($1,$2)"
+
+  TMP_FOLDER=$2
+
+  if [ -f "$TMP_FOLDER/etc/profile.d/nx.sh" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/etc/profile.d/nx.sh"
+  fi
+
+  if [ -f "$TMP_FOLDER/etc/profile.d/nx.csh" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/etc/profile.d/nx.csh"
+  fi
+
+  if [ -d "$TMP_FOLDER/etc/profile.d" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/profile.d")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER/etc/profile.d"
+  fi
+
+  removeTempDirectoryBase "${1}" "runner" "$TMP_FOLDER"
+}
+
+removeTempDirectoryBase ()
+{
+  printMsgDebug "removeTempDirectoryBase: ($1,$2,$3)"
+  ret_removeTempDirectoryBase=0
+
+  product_name="$1"
+  package_name=$2
+  TMP_FOLDER="$3"
+
+  if [ "x$TMP_FOLDER" = "x" ] || [ "x$TMP_FOLDER" = "x/" ];
+  then
+    ret_removeTempDirectoryBase=1
+    return 0
+  fi
+
+  if [ -f "$TMP_FOLDER/nx$package_name" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/nx$package_name"
+  fi
+
+  if [ -f "$TMP_FOLDER/nxclient" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/nxclient"
+  fi
+
+  if [ -f "$TMP_FOLDER/etc/NX/nx$package_name" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/etc/NX/nx$package_name"
+  fi
+
+  if [ -f "$TMP_FOLDER/etc/NX/${product_name}/localhost/$package_name.cfg.sample" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/etc/NX/${product_name}/localhost/$package_name.cfg.sample"
+  fi
+
+  if [ -d "$TMP_FOLDER/etc/NX/${product_name}/localhost" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/NX/${product_name}/localhost")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER/etc/NX/${product_name}/localhost"
+  fi
+
+  if [ -f "$TMP_FOLDER/etc/NX/${product_name}/packages/nx$package_name.tar.gz" ];
+  then
+    $RMCOMMAND "$TMP_FOLDER/etc/NX/${product_name}/packages/nx$package_name.tar.gz"
+  fi
+
+  if [ -d "$TMP_FOLDER/etc/NX/${product_name}/packages" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/NX/${product_name}/packages")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER/etc/NX/${product_name}/packages"
+
+#    if [ -d "$TMP_FOLDER/etc/NX/${product_name}/packages" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/NX/${product_name}/packages")" ];
+#    then
+#      ${RMDIRCOMMAND} "$TMP_FOLDER/etc/NX/${product_name}/packages"
+#    fi
+  fi
+
+    if [ -d "$TMP_FOLDER/etc/NX/${product_name}" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/NX/${product_name}")" ];
+    then
+      ${RMDIRCOMMAND} "$TMP_FOLDER/etc/NX/${product_name}"
+    fi
+
+  if [ -d "$TMP_FOLDER/etc/NX" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc/NX")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER/etc/NX"
+  fi
+
+  if [ -d "$TMP_FOLDER/etc" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER/etc")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER/etc"
+  fi
+
+  if [ -d "$TMP_FOLDER" ] && [ ! "$(${LSCOMMAND} -1A "$TMP_FOLDER")" ];
+  then
+    ${RMDIRCOMMAND} "$TMP_FOLDER"
+  fi
+}
+
+removeTempDirectory ()
+{
+  #
+  # Par1 - productname name, i.e. runner, node, server
+  # Par2 - package name, i.e. runner, node, server
+  # Par3 - path to temp folder
+  #
+
+  printMsgDebug "removeTempDirectory: ($1,$2,$3)"
+
+  ret_removeTempDirectory=0
+  package_name=${2}
+  case $package_name in
+    "runner")
+            removeTempDirectoryRunner "${1}" "${3}"
+            ;;
+    "player")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    "node")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    "server")
+            removeTempDirectoryBase "${1}" "server" "${3}"
+            ;;
+    "webplayer")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    "manager")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    "connect")
+            removeTempDirectoryBase "${1}" "connect" "${3}"
+            ;;
+    "usb")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    "avc")
+            removeTempDirectoryBase "${1}" "$package_name" "${3}"
+            ;;
+    *)
+            ${ECHOCOMMAND} "ERROR: Unknown package -- $package_name"
+            ret_removeTempDirectory=$NX_ERROR_UNKNOWN_PACKAGE_NAME
+            ;;
+   esac
+
+}
+
+printUsageTAR ()
+{
+  ${ECHOCOMMAND} ""
+  ${ECHOCOMMAND} "Available options:"
+  ${ECHOCOMMAND} " --install {SYSTEM}"
+  ${ECHOCOMMAND} " --update  {SYSTEM}"
+  ${ECHOCOMMAND} " --help"
+  ${ECHOCOMMAND} ""
+
+  printHelpSystemInfo
+
+  ${ECHOCOMMAND} ""
+}
+
+checkSystemSupport ()
+{
+    case "$system" in
+      "redhat"             ) ;;
+      "suse"               ) ;;
+      "slackware"          ) ;;
+      "mandriva"           ) ;;
+      "fedora"             ) ;;
+      "debian"             ) ;;
+      "ubuntu"             ) ;;
+      "linuxmint"          ) ;;
+      "elementary"         ) ;;
+      "solaris"            ) ;;
+      "macosx"             ) ;;
+      "linux"              ) printMsg "ERROR: Linux distribution not supported." "0" && printUsageTAR && exit 1;;
+      ""                   ) printMsg "ERROR: Unable to autodetect the operating system type, please specify it." "0" && printUsageTAR && exit 1;;
+      *                    ) printMsg "ERROR: Unsupported operating system '$system'." "0" && printUsageTAR && exit 1;;
+    esac
+}
+
+getParamsTAR ()
+{
+  personal=""
+  system=""
+
+  case $1 in
+    --install)  operation="install"
+                ;;
+    --update)   operation="update"
+                ;;
+    --help)     printUsageTAR
+                exit
+                ;;
+    *)          printUsageTAR
+                exit
+               ;;
+  esac
+
+  if [ "x$2" = "x--personal" ];
+  then
+    personal=$2
+    system=$3
+  else
+    system=$2
+  fi
+
+  if [ "x${operation}" = "xinstall" ] || [ "x${operation}" = "xupdate" ];
+  then
+
+    if [ "x${system}" = "x" ];
+    then
+      getSystemName
+    fi
+
+    checkSystemSupport
+
+  fi
+
+  if [ "x$NX_INSTALL_PREFIX" = "x" ];
+  then
+    if [ "x$InitialDir" != "x" ];
+    then
+      NX_INSTALL_PREFIX="$InitialDir"
+    fi
+  fi
+}
+
+installPackageTAR ()
+{
+  auxOp="$1"
+
+  if [ "$2" = "--personal" ];
+  then
+    installPersonalPackageTAR $auxOp
+    exit
+  fi
+
+  if [ "${PACKAGE_NAME}" = "runner" ]
+  then
+    RunDir=${0%nxclient}
+  else
+    RunDir=${0%nx$PACKAGE_NAME}
+  fi
+
+  RunDir=`(cd "$RunDir" && pwd)`
+  InitialDir=${RunDir%/NX}
+
+  getParamsTAR "$auxOp"
+
+  printMsgDebug "NX_INSTALL_PREFIX=$NX_INSTALL_PREFIX"
+
+######################################################
+# Preinstall procedure
+
+  printMsgDebug "Preinstall procedure."
+
+  if [ "$operation" = "install" ];
+  then
+    isAlreadyInstalled $PACKAGE_NAME
+    if [ $ret_isAlreadyInstalled = "1" ];
+    then
+      operation="update"
+    fi
+  fi
+
+  checkPaths $PACKAGE_NAME $PACKAGE_TYPE $operation
+  if [ $ret_checkPaths = 1 ];
+  then
+    exit 1
+  fi
+
+######################################################
+# Preparing /etc/NX directory
+
+  prepareETCDirectoryForTAR "${PACKAGE_NAME}" "${PACKAGE_NAME}" "$RunDir"
+
+  if [ "$PACKAGE_NAME" = "runner" ];
+  then
+    if [ -d "$RunDir/etc/profile.d" ];
+    then
+      $CPCOMMAND -r "$RunDir/etc/profile.d"   /etc/
+      if [ $? != 0 ];
+      then
+        ${ECHOCOMMAND} "ERROR: Cannot copy directory '$RunDir/etc/profile.d' to '/etc'."
+        exit 1
+      fi
+    fi
+  fi
+
+
+######################################################
+# Postinstall procedure
+
+  printMsgDebug "Postinstall procedure."
+
+  preparePackageAtPostInstall ${PACKAGE_NAME} ${PACKAGE_NAME} "$operation"
+  NX_ROOT="$INSTALL_PATH/NX"
+  printMsgDebug "Installation directory: $NX_ROOT"
+
+  "$NX_ROOT"/scripts/setup/nx$PACKAGE_NAME "--$operation" ${system}
+  if [ $? = 0 ];
+  then
+    removeTempDirectory "${PACKAGE_NAME}" "${PACKAGE_NAME}" "$RunDir"
+  fi
+}
+
+installPersonalPackageTAR ()
+{
+  auxOp="$1"
+
+  if [ $PACKAGE_NAME != "runner" ] && [ $PACKAGE_NAME != "server" ];
+  then
+    ${ECHOCOMMAND} "Personal installation is available only for: nxrunner and nxserver packages."
+  fi
+
+  if [ "${PACKAGE_NAME}" = "runner" ]
+  then
+    RunDir=${0%nxclient}
+  else
+    RunDir=${0%nx$PACKAGE_NAME}
+  fi
+
+  RunDir=`(cd "$RunDir" && pwd)`
+  InitialDir=${RunDir%/NX}
+
+  getParamsTAR "$auxOp"
+
+  printMsgDebug "NX_INSTALL_PREFIX=$NX_INSTALL_PREFIX"
+
+######################################################
+# Preparing /etc/NX directory
+#
+  if [ $PACKAGE_NAME = "server" ];
+  then
+    prepareETCDirectoryForTARPersonal "node" "$RunDir"
+  fi
+
+  prepareETCDirectoryForTARPersonal "$PACKAGE_NAME" "$RunDir"
+
+######################################################
+# Postinstall procedure
+#
+  printMsgDebug "Postinstall procedure."
+
+  if [ $PACKAGE_NAME = "server" ];
+  then
+    preparePackageAtPostInstallPersonal "node" "$operation"
+  fi
+
+  preparePackageAtPostInstallPersonal $PACKAGE_NAME "$operation"
+
+  NX_ROOT="$INSTALL_PATH"
+
+  printMsgDebug "Installation directory: $NX_ROOT"
+
+   if [ $PACKAGE_NAME = "server" ];
+   then
+     "$NX_ROOT"/NX/scripts/setup/nxnode "--$operation" "--personal" ${system}
+   fi
+
+   "$NX_ROOT"/NX/scripts/setup/nx$PACKAGE_NAME "--$operation" "--personal"
+
+  if [ $? = 0 ];
+  then
+    if [ $PACKAGE_NAME = "server" ];
+    then
+      removeTempDirectory "node" "$RunDir"
+    fi
+    removeTempDirectory "$PACKAGE_NAME" "$RunDir"
+  fi
+}
+
+preInstallPackageProcedure ()
+{
+  printMsgDebug "preInstallPackageProcedure: (${PACKAGE_NAME},${PACKAGE_TYPE})"
+
+  ret_preInstallPackageProcedure=0
+  operation="install"
+
+  isInstalled_3  "1"
+  if [ ${ret_isInstalled_3} -ge 2 ];
+    then
+    ret_preInstallPackageProcedure=${ret_isInstalled_3}
+    return 0
+  elif [ ${ret_isInstalled_3} = 1 ];
+  then
+    operation="update"
+    getInstallationPath
+    printMsgDebug "Install path = ${INSTALL_PATH}"
+
+    if [ "${INSTALL_PATH}/NX" != "${OLD_NX_LOCALIZATION}" ];
+    then
+      printErrorInstallationDir "${OLD_NX_LOCALIZATION}" "Runner"
+      ret_preInstallPackageProcedure=1
+    fi
+    return 0 
+  else
+    isInstalledProduct "${PACKAGE_NAME}"
+    if [ ${ret_isInstalledProduct} = 1 ];
+    then
+      operation="update"
+    fi
+  fi
+
+  if [ "${operation}" = "install" ];
+  then
+    canInstall ${PACKAGE_NAME}
+    if [ ${ret_canInstall} = 0 ];
+    then
+      ret_preInstallPackageProcedure=3
+      return 0
+    fi
+  fi
+
+  checkPaths "${PACKAGE_NAME}" "${PACKAGE_TYPE}" "${operation}"
+  if [ ${ret_checkPaths} = 1 ];
+  then
+    ret_preInstallPackageProcedure=2
+    return 0
+  fi
+
+  checkEtcFolder "${PACKAGE_NAME}"
+  if [ ${ret_checkEtcFolder} = 1 ];
+  then
+    ${ECHOCOMMAND} "Please ensure that no files are left in the /etc/NX directory from" 
+    ${ECHOCOMMAND} "a previous installation of a NoMachine package."
+    ret_preInstallPackageProcedure=4
+    return 0
+  fi
+
+  if [ "${NX_MPKG_PACKAGE}" = "server" ];
+  then
+    shutdownServerPreinstall
+  fi
+
+  return 0
+}
+
+printMsgCannotUninstall ()
+{
+  ${ECHOCOMMAND} "WARNING: Cannot stat executable uninstallation script of package: ${1}"
+}
+
+makeBackupPostTrans ()
+{
+  filetrans="$1"
+  filetrans_suffix="backup"
+
+  if [ -f "${filetrans}.${filetrans_suffix}" ] && [ ! -f "${filetrans}" ];
+  then
+    commandRestoreFile "${filetrans}" "${filetrans_suffix}" "error"
+  fi
+
+  if [ -f "${filetrans}" ] && [ ! -f "${filetrans}.${filetrans_suffix}" ];
+  then
+    commandBackupFile "${filetrans}" "${filetrans_suffix}" "error"
+  fi
+}
+
+printInstallationError ()
+{
+  printMsg "Installation not finished due to errors." "error"
+}
+
+copyInstallationFilesFromTmp ()
+{
+  tmp_folder="$1"
+  dst_folder="$2"
+
+  printMsgDebug "copyInstallationFilesFromTmp: ($1,$2)"
+
+  if [ "x${NX_SKIPPED_UNPACK}" = "x1" ];
+  then
+    printMsgDebug "Skipped copying installations files from tmp"
+    return 0 
+  fi
+
+  if [ ! -d "${tmp_folder}" ];
+  then
+    ${ECHOCOMMAND} "ERROR: Cannot stat temporary installation directory: ${tmp_folder}."
+    exit 1
+  fi
+
+  if [ ! -d "${dst_folder}" ];
+  then
+    commandMkDir "${dst_folder}"
+  fi
+
+  if [ "${PACKAGE_TYPE}" = "sparc" ];
+  then
+    cp_option="-pr"
+  else
+    cp_option="-paf --remove-destination"
+  fi
+
+  ${CPCOMMAND} ${cp_option} "${tmp_folder}" "${dst_folder}"/
+  ret=$?
+  commandRmDirRecursively "${tmp_folder}"
+
+  if [ "x${ret}" != "x0" ];
+  then
+    ${ECHOCOMMAND} "ERROR: Cannot copy files from temporary directory: ${tmp_folder} to: ${dst_folder}."
+    exit 1
+  fi
+
+}
+
+restoreETCConffile ()
+{
+  if [ -f /etc/NX/${PACKAGE_NAME}/localhost/${PACKAGE_NAME}.cfg ] && [ ! -f /etc/NX/${PACKAGE_NAME}/localhost/${PACKAGE_NAME}.cfg.sample ];
+  then
+    commandCp /etc/NX/${PACKAGE_NAME}/localhost/${PACKAGE_NAME}.cfg /etc/NX/${PACKAGE_NAME}/localhost/${PACKAGE_NAME}.cfg.sample
+  fi
+}
+
+updateToCloudCfg ()
+{
+  if [ -f "${NX_ROOT}/etc/portal.cfg" ] && [ "${NX_ROOT}/etc/cloud.cfg" ];
+  then
+    commandMv "${NX_ROOT}/etc/portal.cfg" "${NX_ROOT}/etc/cloud.cfg"
+    ${SEDCOMMAND} -e 's:portal\.inc:cloud.inc:' "${NX_ROOT}/etc/cloud.cfg" > "${NX_ROOT}/etc/cloud.cfg.backup" 
+    commandMv "${NX_ROOT}/etc/cloud.cfg.backup" "${NX_ROOT}/etc/cloud.cfg"
+
+    commandRmIfExist "${NX_ROOT}/etc/portal.cfg.sample"
+    commandRmIfExist "${NX_ROOT}/etc/portal.inc.sample"
+
+    if [ -f "${NX_ROOT}/etc/web.cfg" ];
+    then
+      ${SEDCOMMAND} -e 's:portal\.inc:cloud.inc:' "${NX_ROOT}/etc/web.cfg" > "${NX_ROOT}/etc/web.cfg.backup" 
+      commandMv "${NX_ROOT}/etc/web.cfg.backup" "${NX_ROOT}/etc/web.cfg"
+    fi
+  fi
+
+  if [ -f "${NX_ROOT}/etc/portal.inc" ] && [ "${NX_ROOT}/etc/cloud.inc" ];
+  then
+    commandMv "${NX_ROOT}/etc/portal.inc" "${NX_ROOT}/etc/cloud.inc"
+  fi
+}
+
+
+getInstallationPath
+NX_ROOT="${INSTALL_PATH}/NX"
+
+PACKAGE_NAME="server"
+PACKAGE_TYPE="tar"
+NX_MPKG_PACKAGE="${PACKAGE_NAME}"
+
+isAlreadyInstalledServer ()
+{
+
+  ret_isAlreadyInstalledServer=0
+
+  ETC_CONFIG_DIR="/etc/NX"
+  if [ ! -f "/etc/NX/localhost/server.cfg" ];
+  then
+    return 0
+  fi
+
+  ret_isAlreadyInstalledServer=1
+  return 0
+}
+
+installServerTAR ()
+{
+  auxOp="$1"
+
+  RunDir=${0%nx$PACKAGE_NAME}
+  RunDir=`(cd "$RunDir" && pwd)`
+  InitialDir=${RunDir%/NX}
+
+  getParamsTAR "${auxOp}" $2 $3
+
+  printMsgDebug "NX_INSTALL_PREFIX=${NX_INSTALL_PREFIX}"
+
+  isUpgrade ${PACKAGE_NAME}
+  NX_UPGRADE=${ret_isUpgrade}
+
+  if [ ${NX_UPGRADE} = 1 ];
+  then
+
+    #
+    # Uninstall version 3, if available
+    #
+
+    uninstall3
+  fi
+
+######################################################
+# Preinstall procedure
+#
+  printMsgDebug "Preinstall procedure."
+
+  if [ -x /etc/NX/nxserver ];
+  then
+    /etc/NX/nxserver --shutdown > /dev/null 2>&1
+  fi
+
+  killNXApp "nxplayer"
+  killNXApp "nxplayer.bin"
+  
+######################################################
+# Preparing /etc/NX directory
+#
+  prepareETCDirectoryForTAR "${PACKAGE_NAME}" "runner" "${RunDir}"
+  prepareETCDirectoryForTAR "${PACKAGE_NAME}" "player" "${RunDir}"
+  prepareETCDirectoryForTAR "${PACKAGE_NAME}" "node" "${RunDir}"
+  prepareETCDirectoryForTAR "${PACKAGE_NAME}" "server" "${RunDir}"
+
+  if [ "x${INSTALL_WEB}" = "x1" ];
+  then
+    if [ -f "${NX_ROOT}/etc/web.cfg.backup" ] && [ ! -f "${NX_ROOT}/etc/web.cfg" ];
+    then
+      cp -paf "${NX_ROOT}/etc/web.cfg.backup" "${NX_ROOT}/etc/web.cfg"
+    fi
+
+    prepareETCDirectoryForTAR "${PACKAGE_NAME}" "webplayer" "${RunDir}"
+  fi
+
+######################################################
+# Postinstall procedure
+#
+  printMsgDebug "Postinstall procedure."
+
+  getInstallationPath
+  NX_ROOT="${INSTALL_PATH}/NX"
+  printMsgDebug "Installation directory: ${NX_ROOT}"
+
+  if [ ${NX_UPGRADE} = 1 ];
+  then
+    makeBackupPostTrans "${NX_ROOT}/etc/node.cfg"
+    makeBackupPostTrans "${NX_ROOT}/etc/server.cfg"
+    NX_MAIN_INSTALLATION_ACTION="Upgrade"
+  else
+    NX_MAIN_INSTALLATION_ACTION=""
+  fi
+
+  if [ ! -f "${NX_ROOT}/etc/node.cfg" ] && [ -f "${NX_ROOT}/etc/node.cfg.backup" ];
+  then
+    printMsgDebug "Restoring node.cfg file"
+    commandCp "${NX_ROOT}/etc/node.cfg.backup" "${NX_ROOT}/etc/node.cfg"
+  fi
+
+  if [ -f ${NX_ROOT}/etc/server.cfg.backup ] && [ ! -f ${NX_ROOT}/etc/server.cfg ];
+  then
+    printMsgDebug "Restoring node.cfg file"
+    cp -paf "${NX_ROOT}/etc/server.cfg.backup" "${NX_ROOT}/etc/server.cfg"
+  fi
+
+  if [ -f "${NX_ROOT}/etc/node.cfg" ];
+  then
+    operation_node="update"
+  else
+    operation_node="install"
+  fi
+
+  if [ -f "${NX_ROOT}/etc/server.cfg" ];
+  then
+    operation_server="update"
+  else
+    operation_server="install"
+  fi
+
+  updateToCloudCfg
+
+  if [ "x${INSTALL_WEB}" = "x1" ];
+  then
+    if [ -f "${NX_ROOT}/etc/web.cfg" ];
+    then
+      operation_webplayer="update"
+    else
+      operation_webplayer="install"
+    fi
+  fi
+
+  preparePackageAtPostInstall "${PACKAGE_NAME}" "runner" "${operation}"
+  preparePackageAtPostInstall "${PACKAGE_NAME}" "player" "${operation}"
+  preparePackageAtPostInstall "${PACKAGE_NAME}" "node" "${operation_node}"
+  preparePackageAtPostInstall "${PACKAGE_NAME}" "server" "${operation_server}" 
+
+  if [ "x${INSTALL_WEB}" = "x1" ];
+  then
+    preparePackageAtPostInstall "${PACKAGE_NAME}" "webplayer" "${operation_webplayer}"
+  fi
+
+  copyInstallationFilesFromTmp "${TMP_FOLDER}/NX" "${INSTALL_PATH}"
+
+  PACKAGE_TYPE="${PACKAGE_TYPE}" PACKAGE_FILE="${PACKAGE_FILE}" "${NX_ROOT}/scripts/setup/nxserver" "--${operation_server}" ${personal} ${system}
+
+  removeTempDirectory "${PACKAGE_NAME}" "runner" "${RunDir}"
+  removeTempDirectory "${PACKAGE_NAME}" "player" "${RunDir}"
+  removeTempDirectory "${PACKAGE_NAME}" "node" "${RunDir}"
+  removeTempDirectory "${PACKAGE_NAME}" "server" "${RunDir}"
+
+  if [ "x${INSTALL_WEB}" = "x1" ];
+  then
+    removeTempDirectory "${PACKAGE_NAME}" "webplayer" "${RunDir}"
+  fi
+
+  if [ "${PACKAGE_NAME}" = "server" ];
+  then
+    if [ -d /etc/NX/packages/node ];
+    then
+      commandRmDirRecursively "/etc/NX/packages/node" "cmd"
+    fi
+  fi
+
+  commandRm "${NX_ROOT}/../README-NOMACHINE" "cmd"
+}
+
+NX_MPKG_PACKAGE="${PACKAGE_NAME}"
+setPackageVariables
+
+blockAloneUpdatePackageInstallation
+
+RunDir=${0%nx$PACKAGE_NAME}
+RunDir=`(cd "$RunDir" && pwd)`
+InitialDir=${RunDir%/NX}
+
+if [ "x$NX_INSTALL_PREFIX" = "x" ];
+then
+  if [ "x$InitialDir" != "x" ];
+  then    
+    NX_INSTALL_PREFIX="$InitialDir"
+  fi
+fi
+
+getInstallationPath
+
+checkInstallationPathPermissions
+updateOnlyIfServerIsTheSame
+checkLicenseExpirationDate
+showClusterLicenseInformation
+
+backupNodesDatabaseForServer3Upgrade
+backupVersionFile
+installServerTAR $1 $2 $3

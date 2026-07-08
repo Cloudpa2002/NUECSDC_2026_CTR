@@ -1,0 +1,7 @@
+【lubancat_ai_manual_code】LubanCat 端侧 AI 示例代码
+
+功能：LubanCat（RK3588）板载 AI 推理的开发和部署参考。
+- 包含 YOLOv5/YOLOv8 在 RK3588 上的 C++ 部署示例
+- 模型转换流程参考：.pt → .onnx → .rknn
+- 使用 RKNN API 调用 NPU（神经网络处理器）
+- 是实现板载深度学习推理的"说明书"

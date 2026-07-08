@@ -1,0 +1,8 @@
+# 请求参数
+float64 x
+float64 y
+---
+# 响应结果
+bool success
+string message
+
